@@ -88,11 +88,19 @@ function routeFor(start:Place,dest:Room):RouteData {
   return {mode,floors:[start.floor,dest.floor],paths:{[start.floor]:toCore(start.point,mode),[dest.floor]:fromCore(mode,dest.door)},steps:[`Từ ${start.label}, theo mũi tên trên hành lang đến ${mode==='LIFT'?'thang máy':`cầu thang ${mode}`}`,mode==='LIFT'?`Đi thang máy đến ${FLOOR_LABELS[dest.floor]}`:`Theo hai vế thang và chiếu nghỉ đến ${FLOOR_LABELS[dest.floor]}`,`Ra sảnh tầng ${FLOOR_LABELS[dest.floor]} và tiếp tục theo mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
 }
 
-function labelSprite(text:string, accent=false){
-  const c=document.createElement('canvas'); c.width=420;c.height=116; const x=c.getContext('2d')!;
-  x.fillStyle=accent?'#f36b21':'rgba(20,24,27,.94)'; x.beginPath();x.roundRect(5,5,410,106,18);x.fill();
-  x.strokeStyle=accent?'#ffb27f':'#59636a';x.lineWidth=3;x.stroke();x.fillStyle='#fff';x.font='600 38px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(text,210,59);
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));s.scale.set(1.75,.48,1);s.renderOrder=20;return s;
+function labelSprite(text:string, style:'room'|'selected'|'amenity'|'floor'|'pin'='room'){
+  const selected=style==='selected';
+  const c=document.createElement('canvas');c.width=selected?560:440;c.height=selected?170:128;const x=c.getContext('2d')!;
+  const w=c.width,h=c.height;
+  x.shadowColor=selected?'rgba(243,107,33,.5)':'rgba(0,0,0,.38)';x.shadowBlur=18;x.shadowOffsetY=7;
+  x.fillStyle=selected?'#f36b21':style==='floor'?'#f36b21':'rgba(17,24,28,.96)';x.beginPath();x.roundRect(12,10,w-24,h-24,selected?22:17);x.fill();
+  x.shadowColor='transparent';x.strokeStyle=selected?'#ffd1b5':style==='amenity'?'#738086':'#52758a';x.lineWidth=3;x.stroke();
+  if(style==='room'){x.fillStyle='#69aee7';x.beginPath();x.roundRect(12,10,13,h-24,[17,0,0,17]);x.fill()}
+  if(selected){x.fillStyle='rgba(255,255,255,.78)';x.font='700 19px Arial';x.textAlign='left';x.textBaseline='middle';x.fillText('PHÒNG ĐÃ CHỌN',42,48);x.font='700 54px Arial';x.fillStyle='#fff';x.fillText(text,42,108)}
+  else{x.fillStyle='#fff';x.font=style==='floor'?'700 42px Arial':style==='amenity'?'600 29px Arial':'650 36px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(text,w/2,h/2)}
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.minFilter=THREE.LinearMipmapLinearFilter;
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false,depthWrite:false}));
+  s.scale.set(selected?2.7:style==='floor'?1.55:style==='amenity'?1.25:style==='pin'?2.2:1.4,selected?.82:style==='pin'?.62:.41,1);s.renderOrder=20;return s;
 }
 
 function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|null;showAll:boolean;dest:string;start:Place;route:RouteData}){
@@ -102,28 +110,30 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
   const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;host.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xdde8ea,0x1a1410,2.1)); const sun=new THREE.DirectionalLight(0xffe5d2,3.4);sun.position.set(8,15,10);sun.castShadow=true;scene.add(sun);
   const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.rotateSpeed=.34;controls.zoomSpeed=.48;controls.enablePan=false;controls.target.set(5.1,opts.floor===null?(shownFloors.length-1)*spacing/2:.3,3.6);controls.minDistance=7;controls.maxDistance=27;
-  const root=new THREE.Group();root.rotation.y=-.12;root.position.x=-4.6;scene.add(root);
-  const mat=(color:number,opacity=1)=>new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.04,transparent:opacity<1,opacity});
+  const root=new THREE.Group();root.position.x=-4.6;scene.add(root);
+  const mat=(color:number,opacity=1)=>new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.04,transparent:opacity<.999,opacity,depthWrite:opacity>.8});
   const addBox=(parent:THREE.Object3D,size:[number,number,number],pos:[number,number,number],material:THREE.Material)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m};
   FLOOR_LABELS.forEach((fl,f)=>{
     if(!shownFloors.includes(f))return; const y=floorY(f);
     const g=new THREE.Group();g.position.y=y;root.add(g);
-    const involved=opts.route.floors.includes(f);addBox(g,[10.35,.055,7.4],[5.1,0,3.6],mat(involved?0xe5e4df:0x757b7d,involved?.96:.48));
-    ROOMS.filter(r=>r.floor===f).forEach(r=>{const [x1,z1,x2,z2]=r.box;const selected=r.id===opts.dest;const m=addBox(g,[x2-x1-.08,.16,z2-z1-.08],[(x1+x2)/2,.12,(z1+z2)/2],mat(selected?0xf36b21:(r.kind==='class'?0x69aee7:0x5e9ed1),involved?.93:.38));m.userData.room=r.id;
+    const involved=opts.route.floors.includes(f),stackIndex=shownFloors.indexOf(f),isUpper=stackIndex>0;
+    const layerOpacity=opts.floor!==null?.98:opts.showAll?(involved?(isUpper?.58:.88):Math.max(.18,.34-stackIndex*.025)):(isUpper?.56:.94);
+    addBox(g,[10.35,.055,7.4],[5.1,0,3.6],mat(involved?0xe5e4df:0x757b7d,Math.min(layerOpacity+.04,.96)));
+    ROOMS.filter(r=>r.floor===f).forEach(r=>{const [x1,z1,x2,z2]=r.box;const selected=r.id===opts.dest;const roomOpacity=selected?.98:layerOpacity;const m=addBox(g,[x2-x1-.08,.16,z2-z1-.08],[(x1+x2)/2,.12,(z1+z2)/2],mat(selected?0xf36b21:(r.kind==='class'?0x69aee7:0x5e9ed1),roomOpacity));m.userData.room=r.id;
       addBox(g,[.32,.018,.07],[r.door[0],.225,r.door[1]],mat(0xffd2ad));
-      const l=labelSprite(r.id,selected);l.scale.multiplyScalar(selected?.72:.46);l.position.set((x1+x2)/2,selected?.72:.42,(z1+z2)/2);g.add(l);
+      const l=labelSprite(r.id,selected?'selected':'room');(l.material as THREE.SpriteMaterial).opacity=selected?1:Math.max(.5,layerOpacity);l.position.set((x1+x2)/2,selected?.82:.43,(z1+z2)/2);g.add(l);
     });
-    const stepMat=mat(0xd27b47,involved?.95:.42);
+    const stepMat=mat(0xd27b47,Math.max(.42,layerOpacity));
     const ct1=new THREE.Group();for(let i=0;i<7;i++){addBox(ct1,[.42,.025,.14],[-.27,.04+i*.025,-.46+i*.14],stepMat);addBox(ct1,[.42,.025,.14],[.27,.2-i*.025,.46-i*.14],stepMat)}ct1.position.set(CORES.CT1[0],.08,CORES.CT1[1]);g.add(ct1);
     if(f<7){const ct2=new THREE.Group();for(let i=0;i<7;i++){addBox(ct2,[.14,.025,.42],[-.46+i*.14,.04+i*.025,-.25],stepMat);addBox(ct2,[.14,.025,.42],[.46-i*.14,.2-i*.025,.25],stepMat)}ct2.position.set(CORES.CT2[0],.08,CORES.CT2[1]);g.add(ct2)}
-    const amenity=(text:string,p:P,color:number)=>{addBox(g,[.72,.12,.62],[p[0],.1,p[1]],mat(color,involved?.92:.4));const s=labelSprite(text);s.scale.multiplyScalar(.38);s.position.set(p[0],.45,p[1]);g.add(s)};
+    const amenity=(text:string,p:P,color:number)=>{addBox(g,[.72,.12,.62],[p[0],.1,p[1]],mat(color,Math.max(.38,layerOpacity)));const s=labelSprite(text,'amenity');(s.material as THREE.SpriteMaterial).opacity=Math.max(.48,layerOpacity);s.position.set(p[0],.45,p[1]);g.add(s)};
     amenity('CT1',CORES.CT1,0xb96335);if(f<7)amenity('CT2',CORES.CT2,0xb96335);amenity([0,4,5,6,7].includes(f)?'LIFT':'LIFT · NO STOP',CORES.LIFT,[0,4,5,6,7].includes(f)?0x2d8e70:0x704048);amenity('WC NAM',[6.15,6.25],0x687176);amenity('WC NỮ',[7.15,6.25],0x687176);
-    const fs=labelSprite(fl,true);fs.scale.multiplyScalar(.58);fs.position.set(-.35,.34,3.55);g.add(fs);
+    const fs=labelSprite(fl,'floor');fs.position.set(-.35,.38,3.55);g.add(fs);
   });
   const movingArrows:{mesh:THREE.Mesh;a:THREE.Vector3;b:THREE.Vector3;phase:number}[]=[];const visibleFloors=opts.floor===null?opts.route.floors:[opts.floor];
   for(const f of visibleFloors){const pts=opts.route.paths[f];if(!pts)continue;const y=floorY(f)+.34;const lineMat=new THREE.MeshBasicMaterial({color:0xff6418});for(let i=1;i<pts.length;i++){const a=new THREE.Vector3(pts[i-1][0],y,pts[i-1][1]),b=new THREE.Vector3(pts[i][0],y,pts[i][1]);if(a.distanceTo(b)<.03)continue;const curve=new THREE.LineCurve3(a,b);root.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.045,7,false),lineMat));const dir=b.clone().sub(a).normalize();for(let q=0;q<2;q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a,b,phase:q*.5+i*.13})}}}
   if(opts.floor===null&&opts.route.floors.length===2){const core=CORES[opts.route.mode as keyof typeof CORES];const [a,b]=opts.route.floors;const ya=floorY(a)+.34,yb=floorY(b)+.34;const geo=new THREE.CylinderGeometry(.045,.045,Math.abs(yb-ya),10);const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xff6418}));m.position.set(core[0],(ya+yb)/2,core[1]);root.add(m)}
-  const addPin=(point:P,floor:number,text:string,color:number)=>{if(!shownFloors.includes(floor))return;const y=floorY(floor);const pin=new THREE.Group();const ball=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),new THREE.MeshBasicMaterial({color}));ball.position.y=.57;pin.add(ball);const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,8,20),new THREE.MeshBasicMaterial({color}));ring.rotation.x=Math.PI/2;ring.position.y=.34;pin.add(ring);pin.position.set(point[0],y,point[1]);root.add(pin);const label=labelSprite(text,color===0xf04438);label.scale.multiplyScalar(.58);label.position.set(point[0],y+.95,point[1]);root.add(label)};
+  const addPin=(point:P,floor:number,text:string,color:number)=>{if(!shownFloors.includes(floor))return;const y=floorY(floor);const pin=new THREE.Group();const ball=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),new THREE.MeshBasicMaterial({color}));ball.position.y=.57;pin.add(ball);const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,8,20),new THREE.MeshBasicMaterial({color}));ring.rotation.x=Math.PI/2;ring.position.y=.34;pin.add(ring);pin.position.set(point[0],y,point[1]);root.add(pin);const label=labelSprite(text,'pin');label.position.set(point[0],y+.95,point[1]);root.add(label)};
   addPin(opts.start.point,opts.start.floor,'BẠN ĐANG Ở ĐÂY',0xf04438);const destination=ROOMS.find(r=>r.id===opts.dest)!;addPin(destination.door,destination.floor,`ĐẾN · ${opts.dest}`,0xf36b21);
   const grid=new THREE.GridHelper(36,36,0x374046,0x252b2f);grid.position.y=-.2;scene.add(grid);
   renderer.domElement.style.display='block';renderer.domElement.style.maxWidth='100%';
@@ -162,3 +172,4 @@ export default function CampusEMap(){
     <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình. <span>PDF SOURCE · CAMPUS E</span></footer>
   </main>
 }
+
