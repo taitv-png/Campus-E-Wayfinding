@@ -46,16 +46,29 @@ const allDestinations = ROOMS.map(r=>({id:r.id,label:`${r.id} · ${r.name}`}));
 const STARTS:Place[] = [...PLACES,...ROOMS.map(r=>({id:`ROOM-${r.id}`,label:`${r.id} · ${r.name}`,floor:r.floor,point:r.door,type:'lobby' as const}))];
 
 const CORES={CT1:[6.55,3.6] as P,CT2:[1.5,1.4] as P,LIFT:[6.5,5.25] as P};
-const TOP_Z=2.38, LEFT_X=5.72, RIGHT_X=7.82;
-const baseNodes:P[]=[[.6,TOP_Z],[1.3,TOP_Z],[4.2,TOP_Z],[LEFT_X,TOP_Z],[6.45,TOP_Z],[RIGHT_X,TOP_Z],[LEFT_X,1.42],[LEFT_X,3.6],[6.55,3.6],[RIGHT_X,3.6],[RIGHT_X,4.6],[RIGHT_X,4.9],[LEFT_X,5.25],[6.5,5.25],[RIGHT_X,5.25],[LEFT_X,6.15],[RIGHT_X,6.15]];
+const TOP_Z=2.38, LEFT_X=5.72, RIGHT_X=7.82, CT1_FRONT_Z=4.55;
+// Circulation follows the PDF: S4 stops at the west side of CT1. There is no
+// corridor behind/above CT1; S4 connects to S5 by going around its south side.
+const CORE_ACCESS={CT1:[6.55,CT1_FRONT_Z] as P,CT2:[1.5,TOP_Z] as P,LIFT:[LEFT_X,5.25] as P};
+const baseNodes:P[]=[
+  [.6,TOP_Z],[1.3,TOP_Z],[4.2,TOP_Z],[LEFT_X,TOP_Z],
+  [LEFT_X,1.42],[LEFT_X,CT1_FRONT_Z],[6.55,CT1_FRONT_Z],[RIGHT_X,CT1_FRONT_Z],
+  [RIGHT_X,4.6],[RIGHT_X,4.9],[LEFT_X,5.25],[RIGHT_X,5.25],[LEFT_X,6.15],[RIGHT_X,6.15],
+];
 const same=(a:number,b:number)=>Math.abs(a-b)<.03;
+const inRange=(v:number,a:number,b:number)=>v>=Math.min(a,b)-.03&&v<=Math.max(a,b)+.03;
 const connected=(a:P,b:P)=>{
-  if(same(a[1],TOP_Z)&&same(b[1],TOP_Z))return true;
-  if(same(a[0],LEFT_X)&&same(b[0],LEFT_X))return true;
-  if(same(a[0],RIGHT_X)&&same(b[0],RIGHT_X))return true;
-  return [3.6,5.25,6.15].some(z=>same(a[1],z)&&same(b[1],z)&&a[0]>=LEFT_X&&b[0]>=LEFT_X);
+  if(same(a[1],TOP_Z)&&same(b[1],TOP_Z)&&inRange(a[0],.6,LEFT_X)&&inRange(b[0],.6,LEFT_X))return true;
+  if(same(a[0],LEFT_X)&&same(b[0],LEFT_X)&&inRange(a[1],1.42,6.15)&&inRange(b[1],1.42,6.15))return true;
+  if(same(a[1],CT1_FRONT_Z)&&same(b[1],CT1_FRONT_Z)&&inRange(a[0],LEFT_X,RIGHT_X)&&inRange(b[0],LEFT_X,RIGHT_X))return true;
+  return same(a[0],RIGHT_X)&&same(b[0],RIGHT_X)&&inRange(a[1],CT1_FRONT_Z,6.15)&&inRange(b[1],CT1_FRONT_Z,6.15);
 };
-const approach=(p:P):P=>p[1]<=2.65?[p[0],TOP_Z]:p[0]>=8?[RIGHT_X,p[1]]:[LEFT_X,p[1]];
+const approach=(p:P):P=>{
+  if(same(p[0],6.45)&&p[1]<2.2)return [LEFT_X,p[1]]; // E104/E204/... open to S4 on their west side
+  if(p[1]<=2.65&&p[0]<LEFT_X)return [p[0],TOP_Z];
+  if(p[0]>=8)return [RIGHT_X,p[1]];
+  return [LEFT_X,p[1]];
+};
 const dist=(a:P,b:P)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 function corridorPath(from:P,to:P):P[]{
   const a=approach(from),b=approach(to),nodes=[...baseNodes,a,b];const n=nodes.length;const d=Array(n).fill(Infinity),prev=Array(n).fill(-1),seen=Array(n).fill(false);d[n-2]=0;
@@ -63,14 +76,16 @@ function corridorPath(from:P,to:P):P[]{
   const idx:number[]=[];for(let at=n-1;at>=0;at=prev[at]){idx.push(at);if(at===n-2)break;if(prev[at]<0)break}idx.reverse();const path=[from,a,...idx.slice(1,-1).map(i=>nodes[i]),b,to];return path.filter((p,i)=>i===0||dist(p,path[i-1])>.02);
 }
 const pathLength=(p:P[])=>p.slice(1).reduce((s,v,i)=>s+dist(p[i],v),0);
+const toCore=(from:P,mode:'CT1'|'CT2'|'LIFT')=>[...corridorPath(from,CORE_ACCESS[mode]),CORES[mode]].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
+const fromCore=(mode:'CT1'|'CT2'|'LIFT',to:P)=>[CORES[mode],...corridorPath(CORE_ACCESS[mode],to)].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
 function routeFor(start:Place,dest:Room):RouteData {
   if(start.floor===dest.floor) return {mode:'WALK',floors:[dest.floor],paths:{[dest.floor]:corridorPath(start.point,dest.door)},steps:[`Rời ${start.label}`,`Đi theo hành lang ${FLOOR_LABELS[dest.floor]} và theo hướng mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
   const liftStops=[0,4,5,6,7],choices:{mode:'CT1'|'CT2'|'LIFT';point:P;score:number}[]=[{mode:'CT1',point:CORES.CT1,score:0}];
   if(start.floor<7&&dest.floor<7)choices.push({mode:'CT2',point:CORES.CT2,score:0});
   if(liftStops.includes(start.floor)&&liftStops.includes(dest.floor))choices.push({mode:'LIFT',point:CORES.LIFT,score:0});
-  choices.forEach(c=>c.score=pathLength(corridorPath(start.point,c.point))+pathLength(corridorPath(c.point,dest.door))+Math.abs(dest.floor-start.floor)*(c.mode==='LIFT'?.7:1.25));
-  const best=choices.sort((a,b)=>a.score-b.score)[0],mode=best.mode,core=best.point;
-  return {mode,floors:[start.floor,dest.floor],paths:{[start.floor]:corridorPath(start.point,core),[dest.floor]:corridorPath(core,dest.door)},steps:[`Từ ${start.label}, theo mũi tên trên hành lang đến ${mode==='LIFT'?'thang máy':`cầu thang ${mode}`}`,mode==='LIFT'?`Đi thang máy đến ${FLOOR_LABELS[dest.floor]}`:`Theo hai vế thang và chiếu nghỉ đến ${FLOOR_LABELS[dest.floor]}`,`Ra sảnh tầng ${FLOOR_LABELS[dest.floor]} và tiếp tục theo mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
+  choices.forEach(c=>c.score=pathLength(toCore(start.point,c.mode))+pathLength(fromCore(c.mode,dest.door))+Math.abs(dest.floor-start.floor)*(c.mode==='LIFT'?.7:1.25));
+  const best=choices.sort((a,b)=>a.score-b.score)[0],mode=best.mode;
+  return {mode,floors:[start.floor,dest.floor],paths:{[start.floor]:toCore(start.point,mode),[dest.floor]:fromCore(mode,dest.door)},steps:[`Từ ${start.label}, theo mũi tên trên hành lang đến ${mode==='LIFT'?'thang máy':`cầu thang ${mode}`}`,mode==='LIFT'?`Đi thang máy đến ${FLOOR_LABELS[dest.floor]}`:`Theo hai vế thang và chiếu nghỉ đến ${FLOOR_LABELS[dest.floor]}`,`Ra sảnh tầng ${FLOOR_LABELS[dest.floor]} và tiếp tục theo mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
 }
 
 function labelSprite(text:string, accent=false){
@@ -111,7 +126,8 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
   const addPin=(point:P,floor:number,text:string,color:number)=>{if(!shownFloors.includes(floor))return;const y=floorY(floor);const pin=new THREE.Group();const ball=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),new THREE.MeshBasicMaterial({color}));ball.position.y=.57;pin.add(ball);const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,8,20),new THREE.MeshBasicMaterial({color}));ring.rotation.x=Math.PI/2;ring.position.y=.34;pin.add(ring);pin.position.set(point[0],y,point[1]);root.add(pin);const label=labelSprite(text,color===0xf04438);label.scale.multiplyScalar(.58);label.position.set(point[0],y+.95,point[1]);root.add(label)};
   addPin(opts.start.point,opts.start.floor,'BẠN ĐANG Ở ĐÂY',0xf04438);const destination=ROOMS.find(r=>r.id===opts.dest)!;addPin(destination.door,destination.floor,`ĐẾN · ${opts.dest}`,0xf36b21);
   const grid=new THREE.GridHelper(36,36,0x374046,0x252b2f);grid.position.y=-.2;scene.add(grid);
-  let id=0;const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
+  renderer.domElement.style.display='block';renderer.domElement.style.maxWidth='100%';
+  let id=0;const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,true);camera.aspect=w/h;camera.updateProjectionMatrix()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
   const started=performance.now();const animate=()=>{id=requestAnimationFrame(animate);const t=(performance.now()-started)/1000;movingArrows.forEach(a=>a.mesh.position.copy(a.a).lerp(a.b,(t*.42+a.phase)%1));controls.update();renderer.render(scene,camera)};animate();
   let pointerStart:P=[0,0];const down=(e:PointerEvent)=>{pointerStart=[e.clientX,e.clientY]};const click=(e:PointerEvent)=>{if(Math.hypot(e.clientX-pointerStart[0],e.clientY-pointerStart[1])>5)return;const rect=renderer.domElement.getBoundingClientRect();const mouse=new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-((e.clientY-rect.top)/rect.height)*2+1);const ray=new THREE.Raycaster();ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects(root.children,true).find(x=>x.object.userData.room);if(hit)window.dispatchEvent(new CustomEvent('campus-room',{detail:hit.object.userData.room}))};renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointerup',click);
   return ()=>{cancelAnimationFrame(id);ro.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointerup',click);controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();const material=(o as THREE.Mesh).material;if(material){(Array.isArray(material)?material:[material]).forEach(x=>x.dispose())}});renderer.dispose();renderer.domElement.remove()};
@@ -120,7 +136,7 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
 function MiniPlan({floor,dest,route}:{floor:number;dest:string;route:RouteData}){
   return <svg viewBox="0 0 840 620" className="mini-plan" aria-label={`Mặt bằng ${FLOOR_LABELS[floor]}`}>
     <defs><marker id="route-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#fff4eb"/></marker></defs>
-    <rect x="18" y="18" width="804" height="584" rx="12" className="plan-shell"/><path d="M70 203H620M460 100V535M620 203V535M460 295H620M460 419H620M460 486H620" className="plan-corridor"/>
+    <rect x="18" y="18" width="804" height="584" rx="12" className="plan-shell"/><path d="M70 203H460M460 131V535M460 366H620M620 366V535M460 419H487" className="plan-corridor"/>
     {ROOMS.filter(r=>r.floor===floor).map(r=>{const [x1,z1,x2,z2]=r.box;return <g key={r.id}><rect x={25+x1*76} y={25+z1*75} width={(x2-x1)*76} height={(z2-z1)*75} rx="5" className={r.id===dest?'plan-room selected':'plan-room'}/><text x={25+(x1+x2)*38} y={25+(z1+z2)*37.5}>{r.id}</text><circle cx={25+r.door[0]*76} cy={25+r.door[1]*75} r="6" className="door"/></g>})}
     <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}<rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>LIFT</text><text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
     {route.paths[floor]&&<polyline points={route.paths[floor].map(([x,z])=>`${25+x*76},${25+z*75}`).join(' ')} className="plan-route" markerMid="url(#route-arrow)" markerEnd="url(#route-arrow)"/>}
