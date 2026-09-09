@@ -80,7 +80,7 @@ const toCore=(from:P,mode:'CT1'|'CT2'|'LIFT')=>[...corridorPath(from,CORE_ACCESS
 const fromCore=(mode:'CT1'|'CT2'|'LIFT',to:P)=>[CORES[mode],...corridorPath(CORE_ACCESS[mode],to)].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
 function routeFor(start:Place,dest:Room):RouteData {
   if(start.floor===dest.floor) return {mode:'WALK',floors:[dest.floor],paths:{[dest.floor]:corridorPath(start.point,dest.door)},steps:[`Rời ${start.label}`,`Đi theo hành lang ${FLOOR_LABELS[dest.floor]} và theo hướng mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
-  const liftStops=[0,4,5,6,7],choices:{mode:'CT1'|'CT2'|'LIFT';point:P;score:number}[]=[{mode:'CT1',point:CORES.CT1,score:0}];
+  const liftStops=[0,4,5,6],choices:{mode:'CT1'|'CT2'|'LIFT';point:P;score:number}[]=[{mode:'CT1',point:CORES.CT1,score:0}];
   if(start.floor<7&&dest.floor<7)choices.push({mode:'CT2',point:CORES.CT2,score:0});
   if(liftStops.includes(start.floor)&&liftStops.includes(dest.floor))choices.push({mode:'LIFT',point:CORES.LIFT,score:0});
   choices.forEach(c=>c.score=pathLength(toCore(start.point,c.mode))+pathLength(fromCore(c.mode,dest.door))+Math.abs(dest.floor-start.floor)*(c.mode==='LIFT'?.7:1.25));
@@ -136,7 +136,7 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
     const ct1=new THREE.Group();for(let i=0;i<7;i++){addBox(ct1,[.42,.025,.14],[-.27,.04+i*.025,-.46+i*.14],stepMat);addBox(ct1,[.42,.025,.14],[.27,.2-i*.025,.46-i*.14],stepMat)}ct1.position.set(CORES.CT1[0],.08,CORES.CT1[1]);g.add(ct1);
     if(f<7){const ct2=new THREE.Group();for(let i=0;i<7;i++){addBox(ct2,[.14,.025,.42],[-.46+i*.14,.04+i*.025,-.25],stepMat);addBox(ct2,[.14,.025,.42],[.46-i*.14,.2-i*.025,.25],stepMat)}ct2.position.set(CORES.CT2[0],.08,CORES.CT2[1]);g.add(ct2)}
     const amenity=(text:string,p:P,color:number)=>{addBox(g,[.72,.12,.62],[p[0],.1,p[1]],mat(color,Math.max(.38,layerOpacity)));if(text.startsWith('WC')&&(involved||opts.floor!==null)){const s=restroomSprite(text==='WC NỮ');s.position.set(p[0],.48,p[1]);g.add(s)}};
-    amenity('CT1',CORES.CT1,0xb96335);if(f<7)amenity('CT2',CORES.CT2,0xb96335);amenity([0,4,5,6,7].includes(f)?'LIFT':'LIFT · NO STOP',CORES.LIFT,[0,4,5,6,7].includes(f)?0x2d8e70:0x704048);amenity('WC NAM',[6.15,6.25],0x687176);amenity('WC NỮ',[7.15,6.25],0x687176);
+    amenity('CT1',CORES.CT1,0xb96335);if(f<7){amenity('CT2',CORES.CT2,0xb96335);amenity([0,4,5,6].includes(f)?'LIFT':'LIFT · NO STOP',CORES.LIFT,[0,4,5,6].includes(f)?0x2d8e70:0x704048)}amenity('WC NAM',[6.15,6.25],0x687176);amenity('WC NỮ',[7.15,6.25],0x687176);
   });
   const movingArrows:{mesh:THREE.Mesh;a:THREE.Vector3;b:THREE.Vector3;phase:number}[]=[];const visibleFloors=opts.floor===null?opts.route.floors:[opts.floor];
   for(const f of visibleFloors){const pts=opts.route.paths[f];if(!pts)continue;const y=floorY(f)+.34;const lineMat=new THREE.MeshBasicMaterial({color:0xff6418});for(let i=1;i<pts.length;i++){const a=new THREE.Vector3(pts[i-1][0],y,pts[i-1][1]),b=new THREE.Vector3(pts[i][0],y,pts[i][1]);if(a.distanceTo(b)<.03)continue;const curve=new THREE.LineCurve3(a,b);root.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.045,7,false),lineMat));const dir=b.clone().sub(a).normalize();for(let q=0;q<2;q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a,b,phase:q*.5+i*.13})}}}
@@ -156,9 +156,69 @@ function MiniPlan({floor,dest,route}:{floor:number;dest:string;route:RouteData})
     <defs><marker id="route-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="15" markerHeight="15" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#fff4eb"/></marker></defs>
     <rect x="18" y="18" width="804" height="584" rx="12" className="plan-shell"/><path d="M70 203H460M460 131V535M460 366H620M620 366V535M460 419H487" className="plan-corridor"/>
     {ROOMS.filter(r=>r.floor===floor).map(r=>{const [x1,z1,x2,z2]=r.box;return <g key={r.id}><rect x={25+x1*76} y={25+z1*75} width={(x2-x1)*76} height={(z2-z1)*75} rx="5" className={r.id===dest?'plan-room selected':'plan-room'}/><text x={25+(x1+x2)*38} y={25+(z1+z2)*37.5}>{r.id}</text><circle cx={25+r.door[0]*76} cy={25+r.door[1]*75} r="6" className="door"/></g>})}
-    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}<rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>LIFT</text><text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
+    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}{floor<7&&<><rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>LIFT</text></>}<text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
     {route.paths[floor]&&<polyline points={route.paths[floor].map(([x,z])=>`${25+x*76},${25+z*75}`).join(' ')} className="plan-route" markerMid="url(#route-arrow)" markerEnd="url(#route-arrow)"/>}
   </svg>
+}
+
+function RoomPreview({room}:{room:Room}){
+  const host=useRef<HTMLDivElement>(null);
+  const [view,setView]=useState<'perspective'|'top'>('perspective');
+  useEffect(()=>{
+    if(!host.current)return;
+    const el=host.current,scene=new THREE.Scene();scene.background=new THREE.Color('#e9edef');
+    const [x1,z1,x2,z2]=room.box,scale=6/Math.max(x2-x1,z2-z1),w=(x2-x1)*scale,d=(z2-z1)*scale,h=2.4;
+    const camera=new THREE.PerspectiveCamera(38,1,.1,80);camera.position.set(view==='top'?0:8,view==='top'?13:8,view==='top'?.01:10);
+    const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;el.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x89949a,2.4));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(3,9,5);scene.add(light);
+    const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,.5,0);controls.enableDamping=false;controls.minDistance=5;controls.maxDistance=22;controls.maxPolarAngle=Math.PI/2-.03;
+    const solid=new THREE.MeshStandardMaterial({color:0xfaf8f3,roughness:.9,side:THREE.DoubleSide});
+    const floorMat=new THREE.MeshStandardMaterial({color:0xd4d9d8,roughness:.9});
+    const frame=new THREE.MeshStandardMaterial({color:0x47616c});const glass=new THREE.MeshStandardMaterial({color:0x97c8db,transparent:true,opacity:.32,depthWrite:false});
+    const accent=new THREE.MeshStandardMaterial({color:0xf36b21});
+    const box=(a:number,b:number,c:number,x:number,y:number,z:number,mat:THREE.Material)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(a,b,c),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh};
+    box(w+.22,.12,d+.22,0,-.06,0,floorMat);
+    const doorSide=same(room.door[0],x1)?'left':same(room.door[0],x2)?'right':same(room.door[1],z1)?'back':'front';
+    // Cut the opening into its actual boundary. Window placement is conceptual.
+    const sides=['left','right','back','front'] as const;
+    sides.forEach(side=>{
+      const horizontal=side==='back'||side==='front',length=horizontal?w:d;
+      const fixed=side==='left'?-w/2:side==='right'?w/2:side==='back'?-d/2:d/2;
+      const put=(len:number,height:number,at:number,y:number,material:THREE.Material)=>horizontal?box(len,height,.09,at,y,fixed,material):box(.09,height,len,fixed,y,at,material);
+      const cutaway=side==='front'||side==='right';
+      const wall=solid.clone();if(cutaway){wall.transparent=true;wall.opacity=.14;wall.depthWrite=false}
+      if(side===doorSide){
+        const raw=(horizontal?room.door[0]-(x1+x2)/2:room.door[1]-(z1+z2)/2)*scale;
+        const opening=Math.min(.9,length*.45),center=THREE.MathUtils.clamp(raw,-length/2+opening/2+.08,length/2-opening/2-.08);
+        const left=center-opening/2+length/2,right=length/2-center-opening/2;
+        put(left,h,-length/2+left/2,h/2,wall);put(right,h,length/2-right/2,h/2,wall);put(opening,h-1.95,center,(h+1.95)/2,wall);
+        put(.055,1.95,center-opening/2,.975,accent);put(.055,1.95,center+opening/2,.975,accent);put(opening,.055,center,1.95,accent);
+        put(opening,.025,center,.015,accent);
+      }else if(side==='back'||side==='left'){
+        const opening=length*.62;put(length,.85,0,.425,wall);put(length,.35,0,h-.175,wall);
+        put((length-opening)/2,1.2,-(length+opening)/4,1.45,wall);put((length-opening)/2,1.2,(length+opening)/4,1.45,wall);
+        put(opening,1.2,0,1.45,glass);put(opening,.045,0,.85,frame);put(opening,.045,0,2.05,frame);put(.045,1.2,0,1.45,frame);
+      }else put(length,h,0,h/2,wall);
+    });
+    const grid=new THREE.GridHelper(14,28,0xbfcbd0,0xdce2e5);grid.position.y=-.13;scene.add(grid);
+    const render=()=>renderer.render(scene,camera);controls.addEventListener('change',render);controls.update();
+    const resize=new ResizeObserver(()=>{const rect=el.getBoundingClientRect();renderer.setSize(rect.width,rect.height);camera.aspect=rect.width/rect.height;camera.updateProjectionMatrix();render()});resize.observe(el);render();
+    return()=>{resize.disconnect();controls.dispose();scene.traverse(obj=>{if(obj instanceof THREE.Mesh){obj.geometry.dispose();(Array.isArray(obj.material)?obj.material:[obj.material]).forEach(m=>m.dispose())}});renderer.dispose();renderer.domElement.remove()};
+  },[room,view]);
+  return <div className="room-preview"><div className="room-preview-tools"><span>KHÔNG GIAN · {room.id}</span><div><button className={view==='perspective'?'active':''} onClick={()=>setView('perspective')}>Góc 3D</button><button className={view==='top'?'active':''} onClick={()=>setView('top')}>Nhìn từ trên</button></div></div><div ref={host} className="room-canvas" aria-label={`Mô hình phòng ${room.id} trống, có cửa và cửa sổ sơ bộ`}/><div className="room-preview-caption">Kéo để xoay · cuộn để thu phóng <span>Cửa vào màu cam · tường phía trước làm mờ</span></div></div>
+}
+
+function RoomProfile({room}:{room:Room}){
+  const descriptions:Record<string,string>={
+    E001:'Không gian thực hành cơ khí chính xác và thiết bị, phục vụ nghiên cứu và thử nghiệm kỹ thuật.',E002:'Không gian nghiên cứu, thử nghiệm và trình diễn công nghệ in hologram.',
+    E101:'Không gian nghiên cứu và thử nghiệm ứng dụng trí tuệ nhân tạo lấy con người làm trung tâm.',E102:'Không gian trưng bày công nghệ nhập vai và thực hiện các công đoạn hậu kỳ nội dung.',E104:'Không gian kết nối, thử nghiệm và trình diễn các công nghệ nhập vai.',
+    E201:'Không gian học tập có định hướng ứng dụng công nghệ và hỗ trợ tương tác trong giảng dạy.',E202:'Không gian làm việc và trao đổi chuyên môn dành cho hoạt động nghiên cứu.',E203:'Không gian thực hành, nghiên cứu robot và các giải pháp tự động hóa.',E204:'Không gian nghiên cứu và thử nghiệm các bài toán logistics.',
+    E302:'Không gian nghiên cứu và ứng dụng công nghệ trong lĩnh vực biển.',E303:'Không gian nghiên cứu, xử lý và khai thác dữ liệu biển.',E304:'Không gian nghiên cứu và thử nghiệm các hệ thống Internet of Things.',
+    'E402+E403':'Không gian kết nối nghiên cứu trí tuệ nhân tạo và khai thác dữ liệu lớn.',E404:'Không gian nghiên cứu và thực hành về an toàn thông tin.',E401:'Không gian làm việc sáng tạo, phát triển và thử nghiệm ý tưởng.',
+    'E602+E603':'Không gian nghiên cứu và sáng tạo nội dung truyền thông nhập vai.',E604:'Không gian nghiên cứu và thử nghiệm công nghệ vật liệu.',
+    E701:'Không gian trao đổi ý tưởng và phát triển các hoạt động đổi mới sáng tạo.',E702:'Không gian tổ chức hội thảo, trao đổi học thuật và chia sẻ kết quả nghiên cứu.'
+  };
+  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>Chưa bố trí · không gian trống</dd></div></dl><p className="profile-note">Mô tả gợi ý theo tên phòng. Mô hình giữ tỷ lệ mặt bằng và phía cửa vào; chiều cao, cửa sổ chỉ minh họa sơ bộ, chưa phải bố trí được xác nhận.</p></div><RoomPreview room={room}/></section>
 }
 
 export default function CampusEMap(){
@@ -177,6 +237,7 @@ export default function CampusEMap(){
       <div className="map-stage"><div className="stage-tools"><button className={showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(true)}}><Building2/>Toàn bộ tòa nhà</button><button className={!showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(false)}}><Route/>Tầng của tuyến</button><button onClick={()=>setExploded(v=>!v)}><Layers3/>{exploded?'Gộp tầng':'Tách tầng'}</button><span><Rotate3D/> Kéo trái: di chuyển · kéo phải: xoay · cuộn: thu phóng</span></div><div ref={host} className="three-host"/><nav className="floor-rail">{FLOOR_LABELS.map((f,i)=><button key={f} className={oneFloor===i?'active':''} onClick={()=>{setOneFloor(i);setShowAll(false)}}>{f}</button>)}</nav></div>
       <aside className="panel route-panel"><div className="panel-title"><Route/> TUYẾN ĐƯỜNG</div><h2>{start.label}<ChevronRight/>{dest.id}</h2><div className="route-mode"><Navigation/>{route.mode==='LIFT'?'THANG MÁY':route.mode==='WALK'?'CÙNG TẦNG':`CẦU THANG ${route.mode}`}</div><ol>{route.steps.map((s,i)=><li key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></li>)}</ol><div className="mini-head"><Map/> MẶT BẰNG TẦNG · {FLOOR_LABELS[dest.floor]}</div><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></aside>
     </section>
+    <RoomProfile room={dest}/>
     <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình. <span>PDF SOURCE · CAMPUS E</span></footer>
   </main>
 }
