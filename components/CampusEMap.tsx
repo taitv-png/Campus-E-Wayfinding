@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { createRoom104, createStudent, ROOM104, ROOM_ITEMS } from './room104-scene';
+import { createRoom104, createStudent, ROOM_ITEMS } from './room104-scene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Building2, ChevronRight, Footprints, Layers3, LocateFixed, Map, Navigation, Route, Rotate3D } from 'lucide-react';
 
@@ -190,7 +190,6 @@ function RoomPreview({room}:{room:Room}){
   const host=useRef<HTMLDivElement>(null),input=useRef(new Set<string>());
   const sceneApi=useRef<{highlight:(i:number)=>void;activate:(i:number)=>void;jump:()=>void}|null>(null);
   const [view,setView]=useState<'perspective'|'top'|'play'>('perspective');
-  const [openings,setOpenings]=useState<'render'|'pdf'>('render');
   const [furnished,setFurnished]=useState(true),[selected,setSelected]=useState<number|null>(null);
   const [notice,setNotice]=useState('Bấm đồ vật để tìm hiểu'),[reset,setReset]=useState(0);
   const [expanded,setExpanded]=useState(false);
@@ -213,7 +212,7 @@ function RoomPreview({room}:{room:Room}){
     controls.minDistance=2;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=false;
     controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
     controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};controls.update();
-    const built=createRoom104(scene,furnished,openings),avatar=createStudent(scene),person=avatar.root;
+    const built=createRoom104(scene,furnished,'render'),avatar=createStudent(scene),person=avatar.root;
     person.position.copy(built.start);person.rotation.y=Math.PI/2;
     let dirty=true,animateUntil=0;
     const invalidate=()=>{dirty=true};controls.addEventListener('change',invalidate);
@@ -280,19 +279,28 @@ function RoomPreview({room}:{room:Room}){
       scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments){geometries.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{materials.add(m);const map=(m as THREE.MeshStandardMaterial).map;if(map)textures.add(map)})}});
       geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());avatar.dispose();renderer.dispose();renderer.domElement.remove();
     };
-  },[room.id,view,furnished,openings,reset]);
+  },[room.id,view,furnished,reset]);
   if(room.id!=='E104')return <div className="room-pending"><small>MÔ HÌNH THEO BẢN VẼ</small><h3>{room.id}</h3><p>Phòng này chưa có mô hình chi tiết được đối chiếu đầy đủ cửa và cửa sổ. Bản tham quan hiện có tại E104.</p><button onClick={()=>window.dispatchEvent(new CustomEvent('campus-room',{detail:'E104'}))}>Mở phòng E104 →</button></div>;
   return <div className={'room-preview'+(expanded?' room-expanded':'')}>
     <div className="room-preview-tools"><span>E104 · KHÁM PHÁ KHÔNG GIAN</span><div>{(['perspective','top','play'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}<button aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?'Thu gọn':'Mở rộng'}</button></div></div>
-    <div className="room-options"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button><label>Cửa theo <select aria-label="Nguồn bố trí cửa" value={openings} onChange={e=>setOpenings(e.target.value as 'render'|'pdf')}><option value="render">Ảnh render</option><option value="pdf">PDF mặt bằng</option></select></label><span>≈ {ROOM104.width.toFixed(2)} × {ROOM104.depth.toFixed(2)} m</span></div>
+    <div className="room-options"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button></div>
     <div ref={host} tabIndex={0} role="application" className="room-canvas" aria-label="Khám phá E104: WASD để đi, Space nhảy, E tìm hiểu đồ vật"/>
     {view==='play'&&<div className="walk-controls" aria-label="Điều khiển nhân vật">{[['↑','w'],['←','a'],['↓','s'],['→','d']].map(([label,key])=><button key={key} aria-label={'Đi '+label} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);input.current.add(key)}} onPointerUp={()=>input.current.delete(key)} onPointerCancel={()=>input.current.delete(key)}>{label}</button>)}<button className="jump-button" onClick={()=>sceneApi.current?.jump()}>Nhảy</button></div>}
     {selected!==null&&furnished&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin đồ vật" onClick={()=>setSelected(null)}>×</button><small>{ROOM_ITEMS[selected].name}</small><h3>{ROOM_ITEMS[selected].title}</h3><p>{ROOM_ITEMS[selected].description}</p>{[1,3,4,6].includes(selected)&&<button className="object-action" onClick={()=>{sceneApi.current?.activate(selected);setNotice(selected===4?'Máy đang pha cà phê minh họa':selected===3?'Đã đổi trạng thái cánh tủ':'Đã đổi trạng thái màn hình')}}>{ROOM_ITEMS[selected].action}</button>}</div>}
     <div className="room-item-list" aria-label="Đồ vật trong phòng">{ROOM_ITEMS.map((item,i)=><button disabled={!furnished} key={item.name} aria-pressed={selected===i} className={selected===i?'active':''} onClick={()=>setSelected(i)}>{item.name}</button>)}</div>
     <div className="room-preview-caption">{notice}<span>Sinh viên UEH · 1,80 m</span></div>
-    <p className="room-source-note">{openings==='render'?'Cửa và cửa sổ theo ảnh thiết kế; vị trí và kích thước ô mở ước lượng.':'Cửa và cửa sổ theo tỷ lệ mặt bằng PDF.'} Nội thất dựng từ 10 góc render. Chiều cao phòng 3 m là giả định.</p>
   </div>
 }
+function RoomRenderGallery(){
+  const photos=[{file:'134',label:'Toàn cảnh phòng'},{file:'137',label:'Khu bàn học'},{file:'139',label:'Khu làm việc'}];
+  const [active,setActive]=useState(0);
+  const photo=photos[active];
+  return <div className="room-render-gallery" aria-label="Ảnh thiết kế phòng E104">
+    <figure><img src={`${import.meta.env.BASE_URL}rooms/e104/${photo.file}.jpg`} alt={photo.label+' — phòng E104'} width={960} height={540} loading="lazy"/><figcaption>{photo.label}<span>{active+1} / {photos.length}</span></figcaption></figure>
+    <div className="render-thumbnails">{photos.map((item,i)=><button key={item.file} aria-label={'Xem '+item.label.toLowerCase()} aria-pressed={active===i} onClick={()=>setActive(i)}><img src={`${import.meta.env.BASE_URL}rooms/e104/${item.file}.jpg`} alt="" width={960} height={540} loading="lazy"/><span>{item.label}</span></button>)}</div>
+  </div>
+}
+
 function RoomProfile({room}:{room:Room}){
   const descriptions:Record<string,string>={
     E001:'Không gian thực hành cơ khí chính xác và thiết bị, phục vụ nghiên cứu và thử nghiệm kỹ thuật.',E002:'Không gian nghiên cứu, thử nghiệm và trình diễn công nghệ in hologram.',
@@ -303,7 +311,7 @@ function RoomProfile({room}:{room:Room}){
     'E602+E603':'Không gian nghiên cứu và sáng tạo nội dung truyền thông nhập vai.',E604:'Không gian nghiên cứu và thử nghiệm công nghệ vật liệu.',
     E701:'Không gian trao đổi ý tưởng và phát triển các hoạt động đổi mới sáng tạo.',E702:'Không gian tổ chức hội thảo, trao đổi học thuật và chia sẻ kết quả nghiên cứu.'
   };
-  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':'Chưa có bố trí đối chiếu'}</dd></div></dl><p className="profile-note">{room.id==='E104'?'PDF ghi 45 m². Đo theo tỷ lệ bản vẽ: lọt lòng khoảng 8,76 × 5,09 m (44,5 m²). Nội thất tái dựng từ 10 ảnh render bạn cung cấp; kích thước đồ vật là ước lượng. Ảnh render và PDF có khác biệt ô cửa: chọn nguồn bố trí cửa để đối chiếu.':'Mô tả gợi ý theo tên phòng. Chưa hiển thị khối 3D ước lệ để tránh nhầm với kích thước và các cửa thực tế.'}</p></div><RoomPreview room={room}/></section>
+  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':'Chưa có bố trí đối chiếu'}</dd></div></dl>{room.id==='E104'&&<RoomRenderGallery/>}</div><RoomPreview room={room}/></section>
 }
 
 export default function CampusEMap(){
