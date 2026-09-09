@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { createRoom104, createStudent, ROOM104, ROOM_ITEMS } from './room104-scene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Building2, ChevronRight, Footprints, Layers3, LocateFixed, Map, Navigation, Route, Rotate3D } from 'lucide-react';
 
@@ -187,108 +188,111 @@ function roomWalkPath(from:P,to:P,obstacles:Obstacle[]):P[]{
 
 function RoomPreview({room}:{room:Room}){
   const host=useRef<HTMLDivElement>(null),input=useRef(new Set<string>());
+  const sceneApi=useRef<{highlight:(i:number)=>void;activate:(i:number)=>void;jump:()=>void}|null>(null);
   const [view,setView]=useState<'perspective'|'top'|'play'>('perspective');
-  const [furnished,setFurnished]=useState(true),[selected,setSelected]=useState<number|null>(null),[notice,setNotice]=useState('Chọn Tham quan để điều khiển nhân vật');
-  const [reset,setReset]=useState(0);
+  const [openings,setOpenings]=useState<'render'|'pdf'>('render');
+  const [furnished,setFurnished]=useState(true),[selected,setSelected]=useState<number|null>(null);
+  const [notice,setNotice]=useState('Bấm đồ vật để tìm hiểu'),[reset,setReset]=useState(0);
+  const [expanded,setExpanded]=useState(false);
+  useEffect(()=>{sceneApi.current?.highlight(selected??-1)},[selected]);
   useEffect(()=>{
     input.current.clear();setSelected(null);
     if(room.id!=='E104'||!host.current)return;
-    const el=host.current,w=E104_PLAN.width,d=E104_PLAN.depth,h=E104_PLAN.height;
-    const scene=new THREE.Scene();scene.background=new THREE.Color('#e8eef0');
+    const el=host.current;
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#dce3e4');
     const camera=new THREE.PerspectiveCamera(42,1,.1,80);
-    camera.position.set(view==='top'?0:10,view==='top'?12:9,view==='top'?.01:11);
-    const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;el.appendChild(renderer.domElement);
-    scene.add(new THREE.HemisphereLight(0xffffff,0x89979d,2.2));const sun=new THREE.DirectionalLight(0xfffaf3,2.6);sun.position.set(4,10,7);scene.add(sun);
-    const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,.3,0);controls.minDistance=3.5;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=false;
-    const mat=(color:number,opacity=1)=>new THREE.MeshStandardMaterial({color,roughness:.8,transparent:opacity<1,opacity,depthWrite:opacity===1});
-    const white=mat(0xf8f6ef),floorMat=mat(0xd7dfdf),frame=mat(0x526e79),orange=mat(0xf36b21),glass=mat(0x77b7d0,.3),wood=mat(0xc6a581),dark=mat(0x344c59);
-    const box=(a:number,b:number,c:number,x:number,y:number,z:number,material:THREE.Material,parent:THREE.Object3D=scene)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(a,b,c),material);m.position.set(x,y,z);parent.add(m);return m};
-    const floor=box(w,.12,d,0,-.06,0,floorMat);floor.userData.walkable=true;
-    // Horizontal dimensions from source; no fabricated windows on other walls.
-    box(w,.12,.12,0,.06,-d/2,frame);box(w,h,.12,0,h/2,-d/2,white);
-    const front=mat(0xf8f6ef,.1);box(w,h,.12,0,h/2,d/2,front);
-    for(const side of ['left','right']){
-      const x=side==='left'?-w/2:w/2,door=E104_PLAN.doors.find(o=>o.side===side)!;
-      const openings=[{from:door.from,to:door.to,bottom:0,top:2.1,door:true},...(side==='right'?E104_PLAN.windows.map(o=>({...o,bottom:.9,top:2.2,door:false})):[])].sort((a,b)=>a.from-b.from);
-      const wall=side==='right'?mat(0xf8f6ef,.32):white;let cursor=0;
-      const segment=(from:number,to:number,bottom:number,top:number,m:THREE.Material)=>{if(to-from>.001&&top-bottom>.001)box(.12,top-bottom,to-from,x,(bottom+top)/2,-d/2+(from+to)/2,m)};
-      openings.forEach(o=>{segment(cursor,o.from,0,h,wall);segment(o.from,o.to,0,o.bottom,wall);segment(o.from,o.to,o.top,h,wall);
-        segment(o.from-.025,o.from+.025,o.bottom,o.top,o.door?orange:frame);segment(o.to-.025,o.to+.025,o.bottom,o.top,o.door?orange:frame);segment(o.from,o.to,o.top-.035,o.top+.035,o.door?orange:frame);
-        if(o.door){
-          segment(o.from,o.to,0,.025,orange);
-          // Two outward-open leaves, matching the two swing arcs on plan.
-          const leaf=(o.to-o.from)/2;
-          box(leaf,2.06,.045,x+(side==='left'?-1:1)*leaf/2,1.03,-d/2+o.from,wood);
-          box(leaf,2.06,.045,x+(side==='left'?-1:1)*leaf/2,1.03,-d/2+o.to,wood);
-        }else{segment(o.from,o.to,o.bottom,o.top,glass);segment(o.from,o.to,o.bottom-.025,o.bottom+.025,frame);segment((o.from+o.to)/2-.02,(o.from+o.to)/2+.02,o.bottom,o.top,frame)}
-        cursor=o.to;
-      });segment(cursor,d,0,h,wall);
-    }
-    const grid=new THREE.GridHelper(20,40,0xc9d4d7,0xdde5e7);grid.position.y=-.13;scene.add(grid);
-    const obstacles:Obstacle[]=[];const interactables:THREE.Object3D[]=[];
-    if(furnished)ROOM_STATIONS.forEach((p,i)=>{
-      const group=new THREE.Group();group.userData.station=i;scene.add(group);interactables.push(group);
-      box(1.6,.07,.7,p.x,.75,p.z,wood,group);obstacles.push({x:p.x,z:p.z,w:1.6,d:.7});
-      for(const x of [-.68,.68])for(const z of [-.25,.25])box(.055,.72,.055,p.x+x,.36,p.z+z,dark,group);
-      for(const dx of [-.4,.4]){box(.42,.07,.42,p.x+dx,.46,p.z+.66,dark,group);box(.42,.42,.055,p.x+dx,.7,p.z+.86,dark,group);for(const x of [-.16,.16])for(const z of [-.16,.16])box(.035,.43,.035,p.x+dx+x,.215,p.z+.66+z,frame,group);obstacles.push({x:p.x+dx,z:p.z+.68,w:.46,d:.48})}
-      box(.1,.28,.1,p.x, .91,p.z-.08,dark,group);box(.64,.4,.055,p.x,1.13,p.z-.09,dark,group);box(.58,.33,.01,p.x,1.13,p.z-.055,mat(0x68a7bb),group);
-      const badge=labelSprite(String(i+1),'amenity');badge.position.set(p.x,1.5,p.z);badge.scale.set(.42,.2,1);group.add(badge);
-    });
-    // 1.70 m stick figure. Separate limb pivots animate only while walking.
-    const person=new THREE.Group();scene.add(person);const body=mat(0xee7232),limb=mat(0x36566a);
-    const head=new THREE.Mesh(new THREE.SphereGeometry(.14,14,10),body);head.position.y=1.55;person.add(head);
-    const torso=new THREE.Mesh(new THREE.CylinderGeometry(.065,.07,.58,10),limb);torso.position.y=1.09;person.add(torso);
-    const parts:THREE.Group[]=[];
-    for(const [x,y,length] of [[-.18,1.32,.5],[.18,1.32,.5],[-.1,.82,.72],[.1,.82,.72]]){
-      const pivot=new THREE.Group();pivot.position.set(x,y,0);const stick=new THREE.Mesh(new THREE.CylinderGeometry(.038,.038,length,8),limb);stick.position.y=-length/2;pivot.add(stick);person.add(pivot);parts.push(pivot);
-    }
-    const start=new THREE.Vector3(-w/2+.45,0,-d/2+(E104_PLAN.doors[0].from+E104_PLAN.doors[0].to)/2);person.position.copy(start);
-    const ring=new THREE.Mesh(new THREE.RingGeometry(.26,.29,28),new THREE.MeshBasicMaterial({color:0xf36b21,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.015;person.add(ring);
-    let path:P[]=[],frameId=0,last=0,visible=true,walkTime=0;const target=new THREE.Vector3();
-    if(view==='play'){camera.position.copy(start).add(new THREE.Vector3(4,5.3,6));controls.target.copy(start).add(new THREE.Vector3(0,.6,0));controls.update()}
+    camera.position.set(view==='top'?0:-5.8,view==='top'?10:6.9,view==='top'?.01:7.8);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    el.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x8c9598,2));
+    const sun=new THREE.DirectionalLight(0xfff2df,2.6);sun.position.set(-3,8,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:.5,far:22});sun.shadow.bias=-.002;scene.add(sun);
+    const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,.6,0);
+    controls.minDistance=2;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=false;
+    controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
+    controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};controls.update();
+    const built=createRoom104(scene,furnished,openings),avatar=createStudent(scene),person=avatar.root;
+    person.position.copy(built.start);person.rotation.y=Math.PI/2;
+    let dirty=true,animateUntil=0;
+    const invalidate=()=>{dirty=true};controls.addEventListener('change',invalidate);
+    sceneApi.current={highlight:i=>{built.highlight(i);dirty=true},activate:i=>{built.activate(i);animateUntil=performance.now()+5000;dirty=true},jump:()=>{avatar.jump();animateUntil=performance.now()+1000;dirty=true}};
+    let path:P[]=[],frameId=0,last=0,visible=true,walkTime=0;
+    const target=new THREE.Vector3();
+    if(view==='play'){camera.position.copy(built.start).add(new THREE.Vector3(-3.6,4.5,5.6));controls.target.copy(built.start).add(new THREE.Vector3(0,.8,0));controls.update()}
     const keys=input.current;
-    const down=(e:KeyboardEvent)=>{if(['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].includes(e.key.toLowerCase())){e.preventDefault();keys.add(e.key.toLowerCase());path=[]}if(e.key==='Escape'){keys.clear();path=[]}if(e.key.toLowerCase()==='e'&&furnished){let closest=-1,best=2.1;ROOM_STATIONS.forEach((p,i)=>{const distance=Math.hypot(person.position.x-p.x,person.position.z-p.z);if(distance<best){best=distance;closest=i}});if(closest>=0)setSelected(closest);else setNotice('Đi gần một bàn rồi nhấn E để xem thông tin')}};
-    const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase());const blur=()=>{keys.clear();path=[]};
-    el.addEventListener('keydown',down);el.addEventListener('keyup',up);el.addEventListener('blur',blur);window.addEventListener('blur',blur);
-    let pointer:[number,number]=[0,0];const remember=(e:PointerEvent)=>{pointer=[e.clientX,e.clientY];el.focus({preventScroll:true})};
-    const pick=(e:PointerEvent)=>{if(e.button!==0||Math.hypot(e.clientX-pointer[0],e.clientY-pointer[1])>5)return;
-      const rect=renderer.domElement.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),camera);
-      const hit=ray.intersectObjects(interactables,true)[0];if(hit){let object:THREE.Object3D|null=hit.object;while(object&&object.userData.station===undefined)object=object.parent;if(object){setSelected(object.userData.station);return}}
-      if(view==='play'){const ground=ray.intersectObject(floor)[0];if(ground){path=roomWalkPath([person.position.x,person.position.z],[ground.point.x,ground.point.z],obstacles);setNotice(path.length?'Đang đi đến vị trí đã chọn':'Vị trí này không đủ khoảng trống để đi')}}
+    const interact=()=>{let closest=-1,best=2.2;ROOM_ITEMS.forEach((p,i)=>{const distance=Math.hypot(person.position.x-p.x,person.position.z-p.z);if(distance<best){best=distance;closest=i}});if(closest>=0&&furnished)setSelected(closest);else setNotice('Đến gần đồ vật rồi nhấn E để xem thông tin')};
+    const down=(e:KeyboardEvent)=>{
+      if(view!=='play')return;
+      if(['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].includes(e.key.toLowerCase())){e.preventDefault();keys.add(e.key.toLowerCase());path=[]}
+      if(e.code==='Space'){e.preventDefault();if(!e.repeat)avatar.jump()}
+      if(e.key==='Escape'){keys.clear();path=[]}
+      if(e.key.toLowerCase()==='e')interact();
     };
-    renderer.domElement.addEventListener('pointerdown',remember);renderer.domElement.addEventListener('pointerup',pick);
-    const resize=new ResizeObserver(()=>{const r=el.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()});resize.observe(el);
+    const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase()),blur=()=>{keys.clear();path=[]};
+    el.addEventListener('keydown',down);el.addEventListener('keyup',up);window.addEventListener('blur',blur);
+    let pointer:[number,number]=[0,0],dragged=false;
+    const remember=(e:PointerEvent)=>{pointer=[e.clientX,e.clientY];dragged=false;el.focus({preventScroll:true})};
+    const track=(e:PointerEvent)=>{if(e.buttons&&Math.hypot(e.clientX-pointer[0],e.clientY-pointer[1])>6)dragged=true};
+    const pick=(e:PointerEvent)=>{
+      if(e.button!==0||dragged)return;
+      const rect=renderer.domElement.getBoundingClientRect(),ray=new THREE.Raycaster();
+      ray.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),camera);
+      const hit=ray.intersectObjects(built.interactables,true)[0];
+      if(hit){let object:THREE.Object3D|null=hit.object;while(object&&object.userData.station===undefined)object=object.parent;if(object){setSelected(object.userData.station);return}}
+      if(view==='play'){const ground=ray.intersectObject(built.floor)[0];if(ground){path=roomWalkPath([person.position.x,person.position.z],[ground.point.x,ground.point.z],built.obstacles);setNotice(path.length?'Đang đi đến vị trí đã chọn':'Chọn khoảng sàn trống để di chuyển')}}
+      else setSelected(null);
+    };
+    renderer.domElement.addEventListener('pointerdown',remember);renderer.domElement.addEventListener('pointermove',track);renderer.domElement.addEventListener('pointerup',pick);
+    const resize=new ResizeObserver(()=>{const r=el.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();dirty=true});resize.observe(el);
     const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(!visible)blur()});observer.observe(el);
-    const tick=(time:number)=>{frameId=requestAnimationFrame(tick);const dt=Math.min((time-last)/1000,.04);last=time;if(!visible||document.hidden)return;
-      let mx=0,mz=0;
+    const tick=(time:number)=>{
+      frameId=requestAnimationFrame(tick);const dt=Math.min((time-last)/1000,.04);last=time;if(!visible||document.hidden)return;
+      if(view!=='play'&&!dirty&&time>animateUntil)return;
+      let mx=0,mz=0,moving=false;
       if(view==='play'){
-        const forward=new THREE.Vector3();camera.getWorldDirection(forward);forward.y=0;forward.normalize();const right=new THREE.Vector3(-forward.z,0,forward.x);
+        const forward=new THREE.Vector3();camera.getWorldDirection(forward);forward.y=0;forward.normalize();
+        const right=new THREE.Vector3(-forward.z,0,forward.x);
         const f=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown')),r=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
         if(f||r){path=[];mx=forward.x*f+right.x*r;mz=forward.z*f+right.z*r}
-        else if(path.length){const next=path[0];mx=next[0]-person.position.x;mz=next[1]-person.position.z;if(Math.hypot(mx,mz)<.09){path.shift();mx=0;mz=0;if(!path.length)setNotice('Đã đến vị trí đã chọn · tiếp tục đi hoặc bấm bàn để khám phá')}}
-        const length=Math.hypot(mx,mz),before=person.position.clone();if(length>.001){mx=mx/length*dt*1.65;mz=mz/length*dt*1.65;
-          if(roomFree(person.position.x+mx,person.position.z,obstacles))person.position.x+=mx;
-          if(roomFree(person.position.x,person.position.z+mz,obstacles))person.position.z+=mz;
+        else if(path.length){const next=path[0];mx=next[0]-person.position.x;mz=next[1]-person.position.z;if(Math.hypot(mx,mz)<.07){path.shift();mx=0;mz=0;if(!path.length)setNotice('Đã đến · nhấn E hoặc chọn đồ vật để khám phá')}}
+        const length=Math.hypot(mx,mz),before=person.position.clone();
+        if(length>.001){
+          const step=Math.min(dt*1.6,length);mx=mx/length*step;mz=mz/length*step;
+          if(roomFree(person.position.x+mx,person.position.z,built.obstacles))person.position.x+=mx;
+          if(roomFree(person.position.x,person.position.z+mz,built.obstacles))person.position.z+=mz;
           person.rotation.y=Math.atan2(mx,mz);
         }
-        const moving=before.distanceTo(person.position)>.001;walkTime+=moving?dt*8:0;
-        parts.forEach((part,i)=>part.rotation.x=moving?Math.sin(walkTime+(i%2?Math.PI:0))*.48:0);
-        target.copy(person.position).add(new THREE.Vector3(0,.6,0));const delta=target.clone().sub(controls.target);camera.position.add(delta);controls.target.copy(target);controls.update();
+        moving=before.distanceTo(person.position)>.001;walkTime+=moving?dt*8:0;
+        target.copy(person.position).add(new THREE.Vector3(0,.8,0));
+        const delta=target.clone().sub(controls.target);camera.position.add(delta);controls.target.copy(target);controls.update();
       }
-      renderer.render(scene,camera);
-    };frameId=requestAnimationFrame(tick);
-    setNotice(view==='play'?'Bấm vào phòng rồi dùng WASD / phím mũi tên. Hoặc chạm sàn để đi.':'Kéo để xoay · cuộn để thu phóng · bấm bàn để xem thông tin');
-    return()=>{cancelAnimationFrame(frameId);keys.clear();observer.disconnect();resize.disconnect();el.removeEventListener('keydown',down);el.removeEventListener('keyup',up);el.removeEventListener('blur',blur);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',remember);renderer.domElement.removeEventListener('pointerup',pick);controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();const material=(o as THREE.Mesh).material;if(material)(Array.isArray(material)?material:[material]).forEach(m=>{if((m as THREE.MeshStandardMaterial).map)(m as THREE.MeshStandardMaterial).map!.dispose();m.dispose()})});renderer.dispose();renderer.domElement.remove()};
-  },[room.id,view,furnished,reset]);
-  if(room.id!=='E104')return <div className="room-pending"><small>MÔ HÌNH THEO BẢN VẼ</small><h3>{room.id}</h3><p>Phòng này chưa có mô hình chi tiết được đối chiếu đầy đủ cửa và cửa sổ. Bản tham quan thử hiện có tại E104.</p><button onClick={()=>window.dispatchEvent(new CustomEvent('campus-room',{detail:'E104'}))}>Mở phòng mẫu E104 →</button></div>;
-  return <div className="room-preview"><div className="room-preview-tools"><span>E104 · 45 m² theo PDF</span><div>{(['perspective','top','play'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}</div></div>
-    <div className="room-options"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn bàn ghế thử nghiệm':'Hiện bàn ghế thử nghiệm'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button><span>Lọt lòng ≈ {E104_PLAN.width.toFixed(2)} × {E104_PLAN.depth.toFixed(2)} m</span></div>
-    <div ref={host} tabIndex={0} role="application" className="room-canvas" aria-label="Phòng E104 tương tác: WASD hoặc phím mũi tên để đi, E xem bàn, Escape dừng"/>
-    {view==='play'&&<div className="walk-controls" aria-label="Điều khiển nhân vật">{[['↑','w'],['←','a'],['↓','s'],['→','d']].map(([label,key])=><button key={key} aria-label={'Đi '+label} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);input.current.add(key)}} onPointerUp={()=>input.current.delete(key)} onPointerCancel={()=>input.current.delete(key)}>{label}</button>)}</div>}
-    {selected!==null&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin bàn" onClick={()=>setSelected(null)}>×</button><small>BỐ TRÍ THỬ NGHIỆM · TRẠM {selected+1}</small><h3>Bàn trải nghiệm {selected+1}</h3><p>Bàn 1,60 × 0,70 m · 2 ghế · 1 màn hình minh họa. Đây là điểm tương tác mẫu; chưa phải danh mục thiết bị thực tế của E104.</p></div>}
-    <div className="room-preview-caption">{notice}<span>Người mẫu cao 1,70 m · E: xem trạm gần nhất</span></div></div>
+      avatar.update(dt,moving,walkTime);built.update(time,dt,camera,view==='top');renderer.render(scene,camera);dirty=false;
+    };
+    frameId=requestAnimationFrame(tick);
+    setNotice(view==='play'?'Bấm vào phòng · WASD / mũi tên để đi · Space để nhảy · E để tìm hiểu':'Kéo để xoay · chuột phải để dịch chuyển · cuộn để thu phóng');
+    return()=>{
+      cancelAnimationFrame(frameId);keys.clear();sceneApi.current=null;observer.disconnect();resize.disconnect();
+      el.removeEventListener('keydown',down);el.removeEventListener('keyup',up);window.removeEventListener('blur',blur);
+      renderer.domElement.removeEventListener('pointerdown',remember);renderer.domElement.removeEventListener('pointermove',track);renderer.domElement.removeEventListener('pointerup',pick);
+      controls.dispose();const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();
+      scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments){geometries.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{materials.add(m);const map=(m as THREE.MeshStandardMaterial).map;if(map)textures.add(map)})}});
+      geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());avatar.dispose();renderer.dispose();renderer.domElement.remove();
+    };
+  },[room.id,view,furnished,openings,reset]);
+  if(room.id!=='E104')return <div className="room-pending"><small>MÔ HÌNH THEO BẢN VẼ</small><h3>{room.id}</h3><p>Phòng này chưa có mô hình chi tiết được đối chiếu đầy đủ cửa và cửa sổ. Bản tham quan hiện có tại E104.</p><button onClick={()=>window.dispatchEvent(new CustomEvent('campus-room',{detail:'E104'}))}>Mở phòng E104 →</button></div>;
+  return <div className={'room-preview'+(expanded?' room-expanded':'')}>
+    <div className="room-preview-tools"><span>E104 · KHÁM PHÁ KHÔNG GIAN</span><div>{(['perspective','top','play'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}<button aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}>{expanded?'Thu gọn':'Mở rộng'}</button></div></div>
+    <div className="room-options"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button><label>Cửa theo <select aria-label="Nguồn bố trí cửa" value={openings} onChange={e=>setOpenings(e.target.value as 'render'|'pdf')}><option value="render">Ảnh render</option><option value="pdf">PDF mặt bằng</option></select></label><span>≈ {ROOM104.width.toFixed(2)} × {ROOM104.depth.toFixed(2)} m</span></div>
+    <div ref={host} tabIndex={0} role="application" className="room-canvas" aria-label="Khám phá E104: WASD để đi, Space nhảy, E tìm hiểu đồ vật"/>
+    {view==='play'&&<div className="walk-controls" aria-label="Điều khiển nhân vật">{[['↑','w'],['←','a'],['↓','s'],['→','d']].map(([label,key])=><button key={key} aria-label={'Đi '+label} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);input.current.add(key)}} onPointerUp={()=>input.current.delete(key)} onPointerCancel={()=>input.current.delete(key)}>{label}</button>)}<button className="jump-button" onClick={()=>sceneApi.current?.jump()}>Nhảy</button></div>}
+    {selected!==null&&furnished&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin đồ vật" onClick={()=>setSelected(null)}>×</button><small>{ROOM_ITEMS[selected].name}</small><h3>{ROOM_ITEMS[selected].title}</h3><p>{ROOM_ITEMS[selected].description}</p>{[1,3,4,6].includes(selected)&&<button className="object-action" onClick={()=>{sceneApi.current?.activate(selected);setNotice(selected===4?'Máy đang pha cà phê minh họa':selected===3?'Đã đổi trạng thái cánh tủ':'Đã đổi trạng thái màn hình')}}>{ROOM_ITEMS[selected].action}</button>}</div>}
+    <div className="room-item-list" aria-label="Đồ vật trong phòng">{ROOM_ITEMS.map((item,i)=><button disabled={!furnished} key={item.name} aria-pressed={selected===i} className={selected===i?'active':''} onClick={()=>setSelected(i)}>{item.name}</button>)}</div>
+    <div className="room-preview-caption">{notice}<span>Sinh viên UEH · 1,80 m</span></div>
+    <p className="room-source-note">{openings==='render'?'Cửa và cửa sổ theo ảnh thiết kế; vị trí và kích thước ô mở ước lượng.':'Cửa và cửa sổ theo tỷ lệ mặt bằng PDF.'} Nội thất dựng từ 10 góc render. Chiều cao phòng 3 m là giả định.</p>
+  </div>
 }
-
 function RoomProfile({room}:{room:Room}){
   const descriptions:Record<string,string>={
     E001:'Không gian thực hành cơ khí chính xác và thiết bị, phục vụ nghiên cứu và thử nghiệm kỹ thuật.',E002:'Không gian nghiên cứu, thử nghiệm và trình diễn công nghệ in hologram.',
@@ -299,7 +303,7 @@ function RoomProfile({room}:{room:Room}){
     'E602+E603':'Không gian nghiên cứu và sáng tạo nội dung truyền thông nhập vai.',E604:'Không gian nghiên cứu và thử nghiệm công nghệ vật liệu.',
     E701:'Không gian trao đổi ý tưởng và phát triển các hoạt động đổi mới sáng tạo.',E702:'Không gian tổ chức hội thảo, trao đổi học thuật và chia sẻ kết quả nghiên cứu.'
   };
-  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'4 bàn · 8 ghế · 4 màn hình minh họa, có thể ẩn':'Chưa có bố trí đối chiếu'}</dd></div></dl><p className="profile-note">{room.id==='E104'?'Mặt bằng E104 đối chiếu trang 3 PDF: diện tích ghi 45 m², hai cửa hai cánh, hai ô cửa sổ phía hành lang ngoài. Kích thước lọt lòng đo theo tỷ lệ bản vẽ, có sai số; cao phòng 3 m, cửa 2,10 m, bậu cửa sổ 0,90 m là giả định do chưa có mặt đứng. Bàn ghế và màn hình là bố trí thử nghiệm.':'Mô tả gợi ý theo tên phòng. Chưa hiển thị khối 3D ước lệ để tránh nhầm với kích thước và các cửa thực tế.'}</p></div><RoomPreview room={room}/></section>
+  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':'Chưa có bố trí đối chiếu'}</dd></div></dl><p className="profile-note">{room.id==='E104'?'PDF ghi 45 m². Đo theo tỷ lệ bản vẽ: lọt lòng khoảng 8,76 × 5,09 m (44,5 m²). Nội thất tái dựng từ 10 ảnh render bạn cung cấp; kích thước đồ vật là ước lượng. Ảnh render và PDF có khác biệt ô cửa: chọn nguồn bố trí cửa để đối chiếu.':'Mô tả gợi ý theo tên phòng. Chưa hiển thị khối 3D ước lệ để tránh nhầm với kích thước và các cửa thực tế.'}</p></div><RoomPreview room={room}/></section>
 }
 
 export default function CampusEMap(){
