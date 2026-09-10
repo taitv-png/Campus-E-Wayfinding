@@ -69,7 +69,7 @@ export function createRoom104(scene: THREE.Scene, furnished: boolean, openings: 
     for(const [row,x] of [-3.45,-2.30,-1.15].entries())for(const [col,z] of [.07,1.44].entries()){
       if(row===2&&col===0)continue;const g=groups[0];box(.48,.055,1.2,x,.74,z,wood,g);box(.36,.13,1.1,x,.65,z,white,g);addObstacle(x,z,.5,1.22);
       for(const dz of [-.5,.5]){box(.065,.70,.065,x,.35,z+dz,steel,g);box(.55,.055,.065,x,.04,z+dz,steel,g)}
-      for(const dz of [-.31,.31])chair(x-.43,z+dz,Math.PI/2,false,false,g);
+      for(const dz of [-.31,.31])chair(x-.43,z+dz,-Math.PI/2,false,false,g);
     }
     // Open black display shelves, three bays, eleven fine shelves each.
     for(const x of [-3.45,-2.30,-1.15]){const g=groups[2];for(const dx of [-.53,.53])for(const dz of [-.2,.2])box(.035,2.48,.035,x+dx,1.24,-2.25+dz,metal,g);for(let y=.16;y<2.5;y+=.225)box(1.1,.028,.44,x,y,-2.25,metal,g);addObstacle(x,-2.25,1.1,.44)}
@@ -94,12 +94,15 @@ export function createRoom104(scene: THREE.Scene, furnished: boolean, openings: 
     for(const x of [-2.8,0,2.8])for(const z of [-1.25,1.25]){box(1.1,.035,.045,x,2.89,z,metal,overhead);for(const offset of [-.42,0,.42]){const light=cylinder(.045,.12,x+offset,2.8,z,metal,overhead);light.rotation.z=.36}}
   }
   const selection=new THREE.BoxHelper(new THREE.Object3D(),0xed742d);selection.visible=false;scene.add(selection);
+  // Keep overhead equipment legible without obscuring the room or avatar.
+  overhead.traverse(o=>{if(o instanceof THREE.Mesh){const m=(o.material as THREE.Material).clone();m.transparent=true;m.opacity=.18;m.depthWrite=false;o.material=m;o.castShadow=false}});
+  front.children.forEach(o=>{if(o instanceof THREE.Mesh&&o.position.y>2.4){const m=(o.material as THREE.Material).clone();m.transparent=true;m.opacity=.18;m.depthWrite=false;o.material=m;o.castShadow=false;o.userData.faded=true}});
   let selected=-1,cabinetOpen=false,coffeeUntil=0;const displayState={tv:false,computers:false};
   const highlight=(i:number)=>{selected=i;selection.visible=i>=0&&furnished;if(selection.visible)selection.setFromObject(groups[i])};
   const activate=(i:number)=>{if(i===1||i===6){const key=i===1?'tv':'computers';displayState[key]=!displayState[key];const enabled=displayState[key];(i===1?screens.slice(1,2):screens.slice(2)).forEach(m=>{m.color.set(enabled?0x176d80:0x142127);m.emissiveIntensity=enabled?.8:.08})}if(i===3)cabinetOpen=!cabinetOpen;if(i===4)coffeeUntil=performance.now()+4500;};
   const update=(time:number,dt:number,camera:THREE.Camera,top:boolean)=>{
     overhead.visible=!top;
-    walls.forEach(({group,normal})=>{const facing=camera.position.clone().normalize().dot(normal)>.1;group.visible=!top;group.traverse(o=>{if(o instanceof THREE.Mesh&&o.material!==glass){const m=o.material as THREE.MeshStandardMaterial;if(m===white||m===steel||m===metal)return;m.transparent=facing;m.opacity=facing?.12:1;m.depthWrite=!facing}})});
+    walls.forEach(({group,normal})=>{const facing=camera.position.clone().normalize().dot(normal)>.1;group.visible=!top;group.traverse(o=>{if(o instanceof THREE.Mesh&&o.material!==glass&&!o.userData.faded){const m=o.material as THREE.MeshStandardMaterial;if(m===white||m===steel||m===metal)return;m.transparent=facing;m.opacity=facing?.12:1;m.depthWrite=!facing}})});
     cabinetDoors.forEach((g,i)=>{g.rotation.y=THREE.MathUtils.damp(g.rotation.y,cabinetOpen?(i?1:-1)*1.2:0,9,dt)});
     steam.forEach((p,i)=>{p.visible=time<coffeeUntil;p.position.y=1.10+((time*.00017+i*.06)%.40);p.scale.setScalar(1+(p.position.y-1.1)*2)});
     if(selected>=0&&selection.visible)selection.update();
@@ -129,4 +132,3 @@ export function createStudent(scene:THREE.Scene){
   let velocity=0,height=0;
   return {root,jump:()=>{if(height===0)velocity=3.9},update:(dt:number,moving:boolean,time:number)=>{velocity-=10.5*dt;height=Math.max(0,height+velocity*dt);if(height===0)velocity=0;model.position.y=height;limbs.forEach((part,i)=>part.rotation.x=height>0?(i<2?-.55:.25):moving?Math.sin(time+(i%2?Math.PI:0))*.5:0);shadow.scale.setScalar(1-height*.2)},dispose:()=>texture.dispose()};
 }
-
