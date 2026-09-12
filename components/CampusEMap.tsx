@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { ROOM_CATALOGUE, commonSpaceName } from './room-catalogue';
 import { createRoom104, createStudent, ROOM_ITEMS, ROOM104 } from './room104-scene';
 import { createTeachingRoom, createHallway, type TourItem, type Portal } from './campus-tour-scene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -13,16 +14,7 @@ type Place = { id:string; label:string; floor:number; point:P; type:'entry'|'sta
 type RouteData = { mode:'WALK'|'CT1'|'CT2'|'LIFT'; floors:number[]; paths:Record<number,P[]>; steps:string[] };
 
 const FLOOR_LABELS = ['GF','F1','F2','F3','F4','F5','F6','F7'];
-const names: Record<string,string> = {
-  E001:'Precision Mechanics & Equipment Lab', E002:'Hologram Printing Lab',
-  E101:'Human-Centered AI Innovation Lab', E102:'Immersive Technology Exhibition & Post Production Room', E103:'Class room', E104:'Immersive Technology Convergence Center',
-  E201:'Phòng học thông minh', E202:'Phòng nghiên cứu chuyên gia', E203:'Robotics & Automation Lab', E204:'Logistics Lab',
-  E301:'Phòng nghiên cứu', E302:'Ocean Technology Lab', E303:'Marine Data Lab', E304:'IoT Systems Lab',
-  'E402+E403':'AI & Big Data Convergence Lab', E404:'Cyber Security Lab', E401:'Innovation Studio',
-  E501:'Phòng học', E502:'Phòng học', E503:'Phòng học', E504:'Phòng học',
-  'E602+E603':'Immersive Media Lab', E604:'Material Technology Lab', E601:'Phòng nghiên cứu',
-  E701:'Không gian đổi mới sáng tạo', E702:'Không gian hội thảo',
-};
+const names:Record<string,string>=Object.fromEntries(Object.entries(ROOM_CATALOGUE).map(([id,room])=>[id,room.name]));
 
 function floorRooms(floor:number):Room[] {
   if (floor===0) return [
@@ -154,11 +146,12 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
 }
 
 function MiniPlan({floor,dest,route}:{floor:number;dest:string;route:RouteData}){
-  return <svg viewBox="0 0 840 620" className="mini-plan" aria-label={`Mặt bằng ${FLOOR_LABELS[floor]}`}>
+  return <svg viewBox="0 0 1015 620" className="mini-plan" aria-label={`Mặt bằng ${FLOOR_LABELS[floor]}`}>
     <defs><marker id="route-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="15" markerHeight="15" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#fff4eb"/></marker></defs>
     <rect x="18" y="18" width="804" height="584" rx="12" className="plan-shell"/><path d="M70 203H460M460 131V535M460 366H620M620 366V535M460 419H487" className="plan-corridor"/>
     {ROOMS.filter(r=>r.floor===floor).map(r=>{const [x1,z1,x2,z2]=r.box;return <g key={r.id}><rect x={25+x1*76} y={25+z1*75} width={(x2-x1)*76} height={(z2-z1)*75} rx="5" className={r.id===dest?'plan-room selected':'plan-room'}/><text x={25+(x1+x2)*38} y={25+(z1+z2)*37.5}>{r.id}</text><circle cx={25+r.door[0]*76} cy={25+r.door[1]*75} r="6" className="door"/></g>})}
-    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}{floor<7&&<><rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>LIFT</text></>}<text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
+    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}{floor<7&&<><rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>THANG MÁY</text></>}<text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
+    <g className="plan-context"><rect x="875" y="25" width="115" height="570" rx="8"/><path d="M932 40V580" strokeDasharray="18 14"/><text transform="translate(967 310) rotate(-90)">ĐƯỜNG NGUYỄN VĂN THỦ</text><path d="M810 392H875" className="gate-link"/><path d="M825 370V414M849 370V414" className="gate-post"/><text x="840" y="350" className="gate-caption">{floor===0?'CỔNG VÀO':'CỔNG TẦNG TRỆT'}</text><text x="315" y="75" className="common-space">{commonSpaceName(floor)}</text></g>
     {route.paths[floor]&&<polyline points={route.paths[floor].map(([x,z])=>`${25+x*76},${25+z*75}`).join(' ')} className="plan-route" markerMid="url(#route-arrow)" markerEnd="url(#route-arrow)"/>}
   </svg>
 }
@@ -325,16 +318,8 @@ function RoomRenderGallery({id}:{id:string}){
 }
 
 function RoomProfile({room}:{room:Room}){
-  const descriptions:Record<string,string>={
-    E001:'Không gian thực hành cơ khí chính xác và thiết bị, phục vụ nghiên cứu và thử nghiệm kỹ thuật.',E002:'Không gian nghiên cứu, thử nghiệm và trình diễn công nghệ in hologram.',
-    E101:'Không gian nghiên cứu và thử nghiệm ứng dụng trí tuệ nhân tạo lấy con người làm trung tâm.',E102:'Không gian trưng bày công nghệ nhập vai và thực hiện các công đoạn hậu kỳ nội dung.',E104:'Không gian kết nối, thử nghiệm và trình diễn các công nghệ nhập vai.',
-    E201:'Không gian học tập có định hướng ứng dụng công nghệ và hỗ trợ tương tác trong giảng dạy.',E202:'Không gian làm việc và trao đổi chuyên môn dành cho hoạt động nghiên cứu.',E203:'Không gian thực hành, nghiên cứu robot và các giải pháp tự động hóa.',E204:'Không gian nghiên cứu và thử nghiệm các bài toán logistics.',
-    E302:'Không gian nghiên cứu và ứng dụng công nghệ trong lĩnh vực biển.',E303:'Không gian nghiên cứu, xử lý và khai thác dữ liệu biển.',E304:'Không gian nghiên cứu và thử nghiệm các hệ thống Internet of Things.',
-    'E402+E403':'Không gian kết nối nghiên cứu trí tuệ nhân tạo và khai thác dữ liệu lớn.',E404:'Không gian nghiên cứu và thực hành về an toàn thông tin.',E401:'Không gian làm việc sáng tạo, phát triển và thử nghiệm ý tưởng.',
-    'E602+E603':'Không gian nghiên cứu và sáng tạo nội dung truyền thông nhập vai.',E604:'Không gian nghiên cứu và thử nghiệm công nghệ vật liệu.',
-    E701:'Không gian trao đổi ý tưởng và phát triển các hoạt động đổi mới sáng tạo.',E702:'Không gian tổ chức hội thảo, trao đổi học thuật và chia sẻ kết quả nghiên cứu.'
-  };
-  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{descriptions[room.id]||(room.kind==='class'?'Không gian phục vụ hoạt động học tập và trao đổi kiến thức.':'Không gian phục vụ hoạt động nghiên cứu và trao đổi chuyên môn.')}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bố trí lớp học cơ bản · bàn ghế · bảng trắng · bàn giáo viên'}</dd></div></dl>{['E104','E102','E401'].includes(room.id)&&<RoomRenderGallery key={room.id} id={room.id}/>}</div><RoomPreview room={room}/></section>
+  const description=ROOM_CATALOGUE[room.id]?.description;
+  return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{description}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bố trí lớp học cơ bản · bàn ghế · bảng trắng · bàn giáo viên'}</dd></div></dl>{['E104','E102','E401'].includes(room.id)&&<RoomRenderGallery key={room.id} id={room.id}/>}</div><RoomPreview room={room}/></section>
 }
 
 export default function CampusEMap(){
@@ -351,7 +336,7 @@ export default function CampusEMap(){
         <div className="legend"><b>CHÚ THÍCH</b><span><i className="lab"/>Phòng LAB</span><span><i className="class"/>Phòng học</span><span><i className="stair"/>CT1 / CT2</span><span><i className="lift"/>Thang máy</span><span><i className="wc"/>WC Nam / Nữ</span><span><i className="selected"/>Điểm đến</span><span><i className="route"/>Tuyến đường di chuyển</span></div>
       </aside>
       <div className="map-stage"><div className="stage-tools"><button className={showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(true)}}><Building2/>Toàn bộ tòa nhà</button><button className={!showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(false)}}><Route/>Tầng của tuyến</button><button onClick={()=>setExploded(v=>!v)}><Layers3/>{exploded?'Gộp tầng':'Tách tầng'}</button><span><Rotate3D/> Kéo trái: di chuyển · kéo phải: xoay · cuộn: thu phóng</span></div><div ref={host} className="three-host"/><nav className="floor-rail">{FLOOR_LABELS.map((f,i)=><button key={f} className={oneFloor===i?'active':''} onClick={()=>{setOneFloor(i);setShowAll(false)}}>{f}</button>)}</nav></div>
-      <aside className="panel route-panel"><div className="panel-title"><Route/> TUYẾN ĐƯỜNG</div><h2>{start.label}<ChevronRight/>{dest.id}</h2><div className="route-mode"><Navigation/>{route.mode==='LIFT'?'THANG MÁY':route.mode==='WALK'?'CÙNG TẦNG':`CẦU THANG ${route.mode}`}</div><ol>{route.steps.map((s,i)=><li key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></li>)}</ol><div className="mini-head"><Map/> MẶT BẰNG TẦNG · {FLOOR_LABELS[dest.floor]}</div><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></aside>
+      <aside className="panel route-panel"><div className="panel-title"><Route/> TUYẾN ĐƯỜNG</div><h2>{start.label}<ChevronRight/>{dest.id}</h2><div className="destination-summary"><small>PHÒNG ĐẾN · {dest.id}</small><h3>{dest.name}</h3><p>{ROOM_CATALOGUE[dest.id]?.description}</p></div><div className="route-mode"><Navigation/>{route.mode==='LIFT'?'THANG MÁY':route.mode==='WALK'?'CÙNG TẦNG':`CẦU THANG ${route.mode}`}</div><ol>{route.steps.map((s,i)=><li key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></li>)}</ol><div className="mini-head"><Map/> MẶT BẰNG TẦNG · {FLOOR_LABELS[dest.floor]}</div><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></aside>
     </section>
     <RoomProfile room={dest}/>
     <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình. <span>PDF SOURCE · CAMPUS E</span></footer>

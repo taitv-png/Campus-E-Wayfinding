@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { commonSpaceName } from './room-catalogue';
 import { createStudent, type RoomObstacle } from './room104-scene';
 
 export type TourRoom={id:string;name:string;floor:number;box:[number,number,number,number];door:[number,number]};
@@ -102,6 +103,7 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
 export function createHallway(scene:THREE.Scene,rooms:TourRoom[],floorIndex:number,arrival:string){
   const {box,mat,white,metal,teal,sign}=kit(scene),width=26.3,depth=18.5;
   const floor=box(width,.12,depth,0,-.06,0,mat(0xe2e4df));
+  const common=world(3.6,.5);sign(commonSpaceName(floorIndex),common.x,1.4,common.z);
   const obstacles:RoomObstacle[]=[],portals:Portal[]=[],interactables:THREE.Object3D[]=[];
   const addBlock=(a:number,b:number,c:number,d:number,h:number,color:number)=>{const p=world((a+c)/2,(b+d)/2);box((c-a)*SCALE,h,(d-b)*SCALE,p.x,h/2,p.z,mat(color));obstacles.push({x:p.x,z:p.z,w:(c-a)*SCALE,d:(d-b)*SCALE})};
   rooms.forEach(r=>{
