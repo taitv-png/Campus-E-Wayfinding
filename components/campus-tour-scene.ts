@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { commonSpaceName } from './room-catalogue';
 import { createStudent, type RoomObstacle } from './room104-scene';
 
-export type TourRoom={id:string;name:string;floor:number;box:[number,number,number,number];door:[number,number]};
+export type TourRoom={id:string;name:string;floor:number;box:[number,number,number,number];door:[number,number];doors?:[number,number][]};
 export type TourItem={name:string;x:number;z:number;title:string;description:string;action:string};
 export type Portal={id:string;label:string;x:number;z:number;kind:'room'|'exit'|'CT1'|'CT2'|'LIFT'};
 const SCALE=2.57;
@@ -35,8 +35,9 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
   for(let side=0;side<4;side++){
     const g=new THREE.Group();scene.add(g);walls.push(g);const vertical=side<2,length=vertical?d:w;
     const fixed=(side%2?-1:1)*(vertical?w:d)/2;
-    const hasDoor=vertical?Math.abs(entry.x-fixed)<.1:Math.abs(entry.z-fixed)<.1;
-    const at=vertical?entry.z:entry.x;
+    const sideEntry=(room.doors??[room.door]).map(door=>roomEntry({...room,door})).find(e=>vertical?Math.abs(e.x-fixed)<.1:Math.abs(e.z-fixed)<.1);
+    const hasDoor=!!sideEntry;
+    const at=vertical?(sideEntry?.z??entry.z):(sideEntry?.x??entry.x);
     const part=(a:number,b:number,y:number,h:number)=>{if(b<=a)return;box(vertical?.1:b-a,h,vertical?b-a:.1,vertical?fixed:(a+b)/2,y,vertical?(a+b)/2:fixed,wallMat,g)};
     if(hasDoor){part(-length/2,at-.6,1.5,3);part(at+.6,length/2,1.5,3);part(at-.6,at+.6,2.65,.7);
       for(const offset of [-.61,.61])box(vertical?.12:.055,2.3,vertical?.055:.12,vertical?fixed:at+offset,1.15,vertical?at+offset:fixed,metal,g);
@@ -64,12 +65,13 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
     for(let row=0;row<rows;row++)for(let col=0;col<columns;col++){
       const x=columns===2?(col?1:-1)*(deskWidth/2+.48):.25,z=-d/2+3.0+row*1.3;
       // Leave the door landing clear even on side-entry rooms such as E401.
-      if(Math.abs(z-entry.start.z)<1.0&&Math.abs(x-entry.start.x)<deskWidth/2+1.0)continue;
+      if((room.doors??[room.door]).map(door=>roomEntry({...room,door})).some(e=>Math.abs(z-e.start.z)<1.0&&Math.abs(x-e.start.x)<deskWidth/2+1.0))continue;
       desk(x,z,deskWidth,seats);chair(x-.38,z+.53,seats);chair(x+.38,z+.53,seats);
     }
     if(special){screen(0,-d/2+1.25,presentation,Math.min(2.3,w-.8),1.65);obstacle(0,-d/2+1.25,2.1,.42)}
     else{box(Math.min(2.5,w-.7),1.05,.055,0,1.7,-d/2+.12,white,presentation)}
-    desk(-w/2+.85,-d/2+1.0,1.35,teacher);screen(-w/2+.85,-d/2+1.0,teacher,.55,1.05);chair(-w/2+.85,-d/2+1.6,teacher);
+    const teacherX=entry.start.x<0&&entry.start.z<-d/2+1.3?w/2-.85:-w/2+.85;
+    desk(teacherX,-d/2+1.0,1.35,teacher);screen(teacherX,-d/2+1.0,teacher,.55,1.05);chair(teacherX,-d/2+1.6,teacher);
     if(room.id==='E102'){
       const display=add('Vách lưới trưng bày',w/2-.35,0,'Vách lưới đen dọc hai bên phòng, dùng treo và trưng bày học liệu.');
       for(const side of [-1,1])for(let z=-d/2+2.6;z<d/2-.5;z+=2.2){if(Math.abs(side*w/2-entry.x)<.2&&Math.abs(z-entry.z)<1.7)continue;const x=side*(w/2-.15);for(let a=-.85;a<=.85;a+=.14)box(.025,2.05,.012,x,1.05,z+a,metal,display);for(let y=.1;y<2.2;y+=.14)box(.025,.012,1.75,x,y,z,metal,display)}
@@ -93,7 +95,7 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
   let selected=-1;const active=new Set<number>();
   const notes=new THREE.Group();presentation.add(notes);notes.visible=false;
   if(!special&&furnished){for(let i=0;i<4;i++)box(1.0-i*.12,.018,.01,-.4+i*.08,1.95-i*.15,-d/2+.155,teal,notes)}
-  return {floor,obstacles,interactables,items,width:w,depth:d,start:entry.start,portals:[{id:'exit',label:'Ra hành lang',x:entry.x,z:entry.z,kind:'exit' as const}],
+  return {floor,obstacles,interactables,items,width:w,depth:d,start:entry.start,portals:(room.doors??[room.door]).map(door=>{const e=roomEntry({...room,door});return {id:'exit',label:'Ra hành lang',x:e.x,z:e.z,kind:'exit' as const}}),
     highlight:(i:number)=>{selected=i;selection.visible=i>=0&&furnished;if(selection.visible)selection.setFromObject(groups[i])},
     activate:(i:number)=>{active.has(i)?active.delete(i):active.add(i);const on=active.has(i);const screenIndex=i===1&&special?0:i===2?(special?1:0):-1;const m=screens[screenIndex];if(m){m.emissiveIntensity=on?.9:.05;m.color.set(on?0x287e91:0x18292d)}if(!special&&i===1)notes.visible=on},
     update:(time:number,dt:number,camera:THREE.Camera,top:boolean)=>{walls.forEach(g=>g.visible=!top);moving.forEach((o,i)=>{if(i<2&&active.has(3))o.rotation.z+=dt*3;else if(i>=2){o.visible=active.has(4);o.position.y=1.5+Math.sin(time*.002)*.3}});if(selected>=0)selection.update()}
@@ -101,20 +103,17 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
 }
 
 export function createHallway(scene:THREE.Scene,rooms:TourRoom[],floorIndex:number,arrival:string){
-  const {box,mat,white,metal,teal,sign}=kit(scene),width=26.3,depth=18.5;
+  const {box,mat,white,metal,teal,sign}=kit(scene),width=26.3,depth=floorIndex===0?21:18.5;
   const floor=box(width,.12,depth,0,-.06,0,mat(0xe2e4df));
   const common=world(3.6,.5);sign(commonSpaceName(floorIndex),common.x,1.4,common.z);
   const obstacles:RoomObstacle[]=[],portals:Portal[]=[],interactables:THREE.Object3D[]=[];
   const addBlock=(a:number,b:number,c:number,d:number,h:number,color:number)=>{const p=world((a+c)/2,(b+d)/2);box((c-a)*SCALE,h,(d-b)*SCALE,p.x,h/2,p.z,mat(color));obstacles.push({x:p.x,z:p.z,w:(c-a)*SCALE,d:(d-b)*SCALE})};
   rooms.forEach(r=>{
-    // The GF sketch has an undersized inter-room slot. Reserve avatar clearance
-    // on the E001 massing side without moving either recorded doorway.
-    const mass:[number,number,number,number]=[...r.box];if(floorIndex===0&&r.id==='E001')mass[0]+=.35;
-    addBlock(...mass,.8,0xb8c9cc);const p=world(...r.door),[a,b,c,d]=r.box;
-    let nx=0,nz=0;if(Math.abs(r.door[0]-a)<.05)nx=-1;else if(Math.abs(r.door[0]-c)<.05)nx=1;else if(Math.abs(r.door[1]-b)<.05)nz=-1;else nz=1;
+    addBlock(...r.box,.8,0xb8c9cc);(r.doors??[r.door]).forEach(doorPoint=>{const p=world(...doorPoint),[a,b,c,d]=r.box;
+    let nx=0,nz=0;if(Math.abs(doorPoint[0]-a)<.05)nx=-1;else if(Math.abs(doorPoint[0]-c)<.05)nx=1;else if(Math.abs(doorPoint[1]-b)<.05)nz=-1;else nz=1;
     const door=box(nx?.12:1.25,2.3,nx?1.25:.12,p.x+nx*.07,1.15,p.z+nz*.07,teal);
     door.userData.portal=r.id;interactables.push(door);sign(r.id,p.x+nx*.14,2.8,p.z+nz*.14);
-    portals.push({id:r.id,label:`Vào phòng ${r.id}`,x:p.x+nx*.75,z:p.z+nz*.75,kind:'room'});
+    portals.push({id:r.id,label:`Vào phòng ${r.id}`,x:p.x+nx*.75,z:p.z+nz*.75,kind:'room'});});
   });
   addBlock(6.02,3.12,7.25,4.0,.5,0xb48b65);
   if(floorIndex<7)addBlock(.8,.6,2.2,1.45,.45,0xb48b65);
@@ -133,3 +132,4 @@ export function createHallway(scene:THREE.Scene,rooms:TourRoom[],floorIndex:numb
     update:(time:number,dt:number,_camera:THREE.Camera,_top:boolean)=>{npcs.forEach((npc,i)=>{if(i<2){npc.root.position.z=world(5.72,2.1).z+Math.sin(time*.0003+i*Math.PI)*2.0;npc.root.position.x=world(5.72,2.1).x+(i?.25:-.25);npc.root.rotation.y=Math.cos(time*.0003+i*Math.PI)>0?0:Math.PI}else{npc.root.position.x=world(5.72,5.5).x+(i===2?-.4:.4);npc.root.rotation.y=i===2?Math.PI/2:-Math.PI/2}npc.update(dt,i<2,time*.006+i)})}
   };
 }
+

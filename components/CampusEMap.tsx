@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ROOM_CATALOGUE, commonSpaceName } from './room-catalogue';
 import { createRoom104, createStudent, ROOM_ITEMS, ROOM104 } from './room104-scene';
@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Building2, ChevronRight, Footprints, Layers3, LocateFixed, Map, Navigation, Route, Rotate3D } from 'lucide-react';
 
 type P = [number, number];
-type Room = { id:string; name:string; floor:number; box:[number,number,number,number]; door:P; kind:'lab'|'class'|'support' };
+type Room = { id:string; name:string; floor:number; box:[number,number,number,number]; door:P; doors?:P[]; outline?:P[]; kind:'lab'|'class'|'support' };
 type Place = { id:string; label:string; floor:number; point:P; type:'entry'|'stair'|'lift'|'lobby' };
 type RouteData = { mode:'WALK'|'CT1'|'CT2'|'LIFT'; floors:number[]; paths:Record<number,P[]>; steps:string[] };
 
@@ -18,8 +18,8 @@ const names:Record<string,string>=Object.fromEntries(Object.entries(ROOM_CATALOG
 
 function floorRooms(floor:number):Room[] {
   if (floor===0) return [
-    {id:'E002',name:names.E002,floor,box:[.35,2.62,3.1,6.95],door:[3.1,5.15],kind:'lab'},
-    {id:'E001',name:names.E001,floor,box:[3.25,2.62,5.38,6.95],door:[5.38,5.15],kind:'lab'},
+    {id:'E002',name:names.E002,floor,box:[.35,2.62,2.62,6.95],door:[2.62,4.0],kind:'lab'},
+    {id:'E001',name:names.E001,floor,box:[2.8,5.1,5.38,7.35],door:[3.15,5.1],outline:[[2.8,5.1],[5.38,5.1],[5.38,5.85],[4.85,5.85],[4.85,7.35],[2.8,7.0]],kind:'lab'},
   ];
   const sets = [[],['E103','E102','E104','E101'],['E203','E202','E204','E201'],['E303','E302','E304','E301'],['E402+E403','E404','E401'],['E503','E502','E504','E501'],['E602+E603','E604','E601'],['E702','E701']] as string[][];
   const boxes = sets[floor].length===4
@@ -28,13 +28,13 @@ function floorRooms(floor:number):Room[] {
     : [[.35,2.62,5.38,6.95],[6.45,.25,9.85,2.18],[8.18,2.62,9.85,6.95]];
   const doors4:P[]=[[1.3,2.62],[4.2,2.62],[6.45,1.42],[8.18,4.6]];
   const doors3:P[]=[[4.2,2.62],[6.45,1.42],[8.18,4.6]];
-  const doors7:P[]=[[4.2,2.62],[8.18,4.6]];
+  const doors7:P[]=[[5.38,4.6],[8.18,4.6]];
   const doors=sets[floor].length===4?doors4:floor===7?doors7:doors3;
-  return sets[floor].map((id,i)=>({id,name:names[id],floor,box:boxes[i] as Room['box'],door:doors[i],kind: floor===5||id.endsWith('03')?'class':'lab'}));
+  return sets[floor].map((id,i)=>({id,name:names[id],floor,box:boxes[i] as Room['box'],door:doors[i],doors:floor<7&&(id.endsWith('02')||id.includes('+'))?[doors[i],[5.38,4.6]]:[doors[i]],kind: floor===5||id.endsWith('03')?'class':'lab'}));
 }
 const ROOMS = FLOOR_LABELS.flatMap((_,i)=>floorRooms(i));
 const PLACES:Place[] = [
-  {id:'ENTRY',label:'Sảnh chính · Tầng trệt',floor:0,point:[9.9,4.9],type:'entry'},
+  {id:'ENTRY',label:'Cổng Nguyễn Văn Thủ · Tầng trệt',floor:0,point:[14.1,7.2],type:'entry'},
 ];
 const allDestinations = ROOMS.map(r=>({id:r.id,label:`${r.id} · ${r.name}`}));
 const STARTS:Place[] = [...PLACES,...ROOMS.map(r=>({id:`ROOM-${r.id}`,label:`${r.id} · ${r.name}`,floor:r.floor,point:r.door,type:'lobby' as const}))];
@@ -70,16 +70,34 @@ function corridorPath(from:P,to:P):P[]{
   const idx:number[]=[];for(let at=n-1;at>=0;at=prev[at]){idx.push(at);if(at===n-2)break;if(prev[at]<0)break}idx.reverse();const path=[from,a,...idx.slice(1,-1).map(i=>nodes[i]),b,to];return path.filter((p,i)=>i===0||dist(p,path[i-1])>.02);
 }
 const pathLength=(p:P[])=>p.slice(1).reduce((s,v,i)=>s+dist(p[i],v),0);
-const toCore=(from:P,mode:'CT1'|'CT2'|'LIFT')=>[...corridorPath(from,CORE_ACCESS[mode]),CORES[mode]].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
-const fromCore=(mode:'CT1'|'CT2'|'LIFT',to:P)=>[CORES[mode],...corridorPath(CORE_ACCESS[mode],to)].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
-function routeFor(start:Place,dest:Room):RouteData {
-  if(start.floor===dest.floor) return {mode:'WALK',floors:[dest.floor],paths:{[dest.floor]:corridorPath(start.point,dest.door)},steps:[`Rời ${start.label}`,`Đi theo hành lang ${FLOOR_LABELS[dest.floor]} và theo hướng mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
+// The ground floor is an open lobby, not the upper-floor corridor template.
+function groundApproach(p:P):P[]{
+  if(p[0]>10)return [p,[9.1,7.2],[9.1,4.55],[5.72,4.55]];
+  if(same(p[0],2.62))return [p,[3.0,4.0],[3.0,4.55],[5.72,4.55]];
+  if(same(p[1],5.1))return [p,[p[0],4.55],[5.72,4.55]];
+  return [p,[5.72,p[1]],[5.72,4.55]];
+}
+function floorPath(from:P,to:P,floor:number):P[]{
+  if(floor!==0)return corridorPath(from,to);
+  const path=[...groundApproach(from),...groundApproach(to).reverse()];
+  return path.filter((p,i)=>!i||dist(p,path[i-1])>.02);
+}
+const toCore=(from:P,mode:'CT1'|'CT2'|'LIFT',floor=1)=>[...floorPath(from,CORE_ACCESS[mode],floor),CORES[mode]].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
+const fromCore=(mode:'CT1'|'CT2'|'LIFT',to:P,floor=1)=>[CORES[mode],...floorPath(CORE_ACCESS[mode],to,floor)].filter((p,i,a)=>i===0||dist(p,a[i-1])>.02);
+function routeSingle(start:Place,dest:Room):RouteData {
+  if(start.floor===dest.floor) return {mode:'WALK',floors:[dest.floor],paths:{[dest.floor]:floorPath(start.point,dest.door,start.floor)},steps:[`Rời ${start.label}`,`Đi theo hành lang ${FLOOR_LABELS[dest.floor]} và theo hướng mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
   const liftStops=[0,4,5,6],choices:{mode:'CT1'|'CT2'|'LIFT';point:P;score:number}[]=[{mode:'CT1',point:CORES.CT1,score:0}];
   if(start.floor<7&&dest.floor<7)choices.push({mode:'CT2',point:CORES.CT2,score:0});
   if(liftStops.includes(start.floor)&&liftStops.includes(dest.floor))choices.push({mode:'LIFT',point:CORES.LIFT,score:0});
-  choices.forEach(c=>c.score=pathLength(toCore(start.point,c.mode))+pathLength(fromCore(c.mode,dest.door))+Math.abs(dest.floor-start.floor)*(c.mode==='LIFT'?.7:1.25));
+  choices.forEach(c=>c.score=pathLength(toCore(start.point,c.mode,start.floor))+pathLength(fromCore(c.mode,dest.door,dest.floor))+Math.abs(dest.floor-start.floor)*(c.mode==='LIFT'?.7:1.25));
   const best=choices.sort((a,b)=>a.score-b.score)[0],mode=best.mode;
-  return {mode,floors:[start.floor,dest.floor],paths:{[start.floor]:toCore(start.point,mode),[dest.floor]:fromCore(mode,dest.door)},steps:[`Từ ${start.label}, theo mũi tên trên hành lang đến ${mode==='LIFT'?'thang máy':`cầu thang ${mode}`}`,mode==='LIFT'?`Đi thang máy đến ${FLOOR_LABELS[dest.floor]}`:`Theo hai vế thang và chiếu nghỉ đến ${FLOOR_LABELS[dest.floor]}`,`Ra sảnh tầng ${FLOOR_LABELS[dest.floor]} và tiếp tục theo mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
+  return {mode,floors:[start.floor,dest.floor],paths:{[start.floor]:toCore(start.point,mode,start.floor),[dest.floor]:fromCore(mode,dest.door,dest.floor)},steps:[`Từ ${start.label}, theo mũi tên trên hành lang đến ${mode==='LIFT'?'thang máy':`cầu thang ${mode}`}`,mode==='LIFT'?`Đi thang máy đến ${FLOOR_LABELS[dest.floor]}`:`Theo hai vế thang và chiếu nghỉ đến ${FLOOR_LABELS[dest.floor]}`,`Ra sảnh tầng ${FLOOR_LABELS[dest.floor]} và tiếp tục theo mũi tên`, `Dừng ngay trước cửa ${dest.id}`]};
+}
+
+function routeFor(start:Place,dest:Room):RouteData {
+  const origin=ROOMS.find(r=>`ROOM-${r.id}`===start.id);
+  const candidates=(origin?.doors??[start.point]).flatMap(point=>(dest.doors??[dest.door]).map(door=>routeSingle({...start,point},{...dest,door})));
+  return candidates.sort((a,b)=>Object.values(a.paths).reduce((s,p)=>s+pathLength(p),0)-Object.values(b.paths).reduce((s,p)=>s+pathLength(p),0))[0];
 }
 
 function labelSprite(text:string, style:'room'|'selected'|'amenity'|'floor'|'pin'='room'){
@@ -91,7 +109,7 @@ function labelSprite(text:string, style:'room'|'selected'|'amenity'|'floor'|'pin
   x.shadowColor='transparent';x.strokeStyle=selected?'#ffd1b5':style==='amenity'?'#738086':'#52758a';x.lineWidth=3;x.stroke();
   if(style==='room'){x.fillStyle='#69aee7';x.beginPath();x.roundRect(12,10,13,h-24,[17,0,0,17]);x.fill()}
   if(selected){x.fillStyle='rgba(255,255,255,.78)';x.font='700 19px Arial';x.textAlign='left';x.textBaseline='middle';x.fillText('PHÒNG ĐÃ CHỌN',42,48);x.font='700 54px Arial';x.fillStyle='#fff';x.fillText(text,42,108)}
-  else{x.fillStyle='#fff';x.font=style==='floor'?'700 42px Arial':style==='amenity'?'600 29px Arial':'650 36px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(text,w/2,h/2)}
+  else{x.fillStyle='#fff';x.font=style==='floor'?'700 42px Arial':style==='amenity'?'600 29px Arial':'650 36px Arial';x.textAlign='center';x.textBaseline='middle';if(x.measureText(text).width>w-48)x.font=`600 ${Math.floor(29*(w-48)/x.measureText(text).width)}px Arial`;x.fillText(text,w/2,h/2)}
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.minFilter=THREE.LinearMipmapLinearFilter;
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false,depthWrite:false}));
   s.scale.set(selected?2.7:style==='floor'?1.55:style==='amenity'?1.25:style==='pin'?2.2:1.4,selected?.82:style==='pin'?.62:.41,1);s.renderOrder=20;return s;
@@ -107,12 +125,12 @@ function restroomSprite(female:boolean){
 }
 
 function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|null;showAll:boolean;dest:string;start:Place;route:RouteData}){
-  const scene=new THREE.Scene();scene.background=new THREE.Color('#101416');scene.fog=new THREE.Fog('#101416',18,37);
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#101416');scene.fog=new THREE.Fog('#101416',45,90);
   const shownFloors=opts.floor!==null?[opts.floor]:opts.showAll?FLOOR_LABELS.map((_,i)=>i):[...new Set(opts.route.floors)].sort((a,b)=>a-b);const spacing=opts.exploded?1.42:.48;const floorY=(f:number)=>opts.floor!==null?0:Math.max(0,shownFloors.indexOf(f))*spacing;
   const camera=new THREE.PerspectiveCamera(38,1,.1,100); camera.position.set(opts.showAll?15:13,opts.showAll?11:7.5,opts.showAll?21:16);
   const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;host.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xdde8ea,0x1a1410,2.1)); const sun=new THREE.DirectionalLight(0xffe5d2,3.4);sun.position.set(8,15,10);sun.castShadow=true;scene.add(sun);
-  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.rotateSpeed=.34;controls.zoomSpeed=.48;controls.enablePan=true;controls.panSpeed=.65;controls.screenSpacePanning=true;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};controls.target.set(.5,opts.floor===null?(shownFloors.length-1)*spacing/2:.3,3.6);controls.minDistance=7;controls.maxDistance=27;
+  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.rotateSpeed=.34;controls.zoomSpeed=.48;controls.enablePan=true;controls.panSpeed=.65;controls.screenSpacePanning=true;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};controls.target.set(shownFloors.includes(0)?2.7:.5,opts.floor===null?(shownFloors.length-1)*spacing/2:.3,3.6);controls.minDistance=7;controls.maxDistance=48;
   const root=new THREE.Group();root.position.x=-4.6;scene.add(root);
   const mat=(color:number,opacity=1)=>new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.04,transparent:opacity<.999,opacity,depthWrite:opacity>.8});
   const addBox=(parent:THREE.Object3D,size:[number,number,number],pos:[number,number,number],material:THREE.Material)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m};
@@ -121,11 +139,12 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
     const g=new THREE.Group();g.position.y=y;root.add(g);
     const involved=opts.route.floors.includes(f),stackIndex=shownFloors.indexOf(f),isUpper=stackIndex>0;
     const layerOpacity=opts.floor!==null?.98:opts.showAll?(involved?(isUpper?.58:.88):Math.max(.18,.34-stackIndex*.025)):(isUpper?.56:.94);
-    addBox(g,[10.35,.055,7.4],[5.1,0,3.6],mat(involved?0xe5e4df:0x757b7d,Math.min(layerOpacity+.04,.96)));
-    ROOMS.filter(r=>r.floor===f).forEach(r=>{const [x1,z1,x2,z2]=r.box;const selected=r.id===opts.dest;const roomOpacity=selected?.98:layerOpacity;const m=addBox(g,[x2-x1-.08,.16,z2-z1-.08],[(x1+x2)/2,.12,(z1+z2)/2],mat(selected?0xf36b21:(r.kind==='class'?0x69aee7:0x5e9ed1),roomOpacity));m.userData.room=r.id;
-      addBox(g,[.32,.018,.07],[r.door[0],.225,r.door[1]],mat(0xffd2ad));
-      if(selected){const l=labelSprite(r.id,'selected');l.position.set((x1+x2)/2,.82,(z1+z2)/2);g.add(l)}
+    addBox(g,f===0?[14.6,.055,9]:[10.35,.055,7.4],f===0?[7.2,0,4.4]:[5.1,0,3.6],mat(involved?0xe5e4df:0x757b7d,Math.min(layerOpacity+.04,.96)));
+    ROOMS.filter(r=>r.floor===f).forEach(r=>{const [x1,z1,x2,z2]=r.box;const selected=r.id===opts.dest;const roomOpacity=selected?.98:layerOpacity;const m=addBox(g,[x2-x1-.08,.16,z2-z1-.08],[(x1+x2)/2,.12,(z1+z2)/2],mat(selected?0xf36b21:(r.kind==='class'?0x69aee7:0x5e9ed1),roomOpacity));m.userData.room=r.id;if(r.outline){m.visible=false;const shape=new THREE.Shape();r.outline.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));shape.closePath();const mesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.16,bevelEnabled:false}),m.material);mesh.rotation.x=-Math.PI/2;mesh.position.y=.04;mesh.userData.room=r.id;g.add(mesh)}
+      (r.doors??[r.door]).forEach(door=>addBox(g,same(door[1],z1)?[.32,.018,.07]:[.07,.018,.32],[door[0],.225,door[1]],mat(0xffd2ad)));
+      if(selected){const l=labelSprite(r.id,'selected');l.position.set((x1+x2)/2,.82,(z1+z2)/2);l.userData.room=r.id;g.add(l)}
     });
+    if(f===0){addBox(g,[1.35,.04,9.6],[15.2,-.015,4.4],mat(0x35474f,.9));for(let z=.2;z<9;z+=1.1)addBox(g,[.045,.012,.5],[15.2,.02,z],mat(0xa9b6bb,.8));for(const z of [6.65,7.75])addBox(g,[.15,.6,.15],[14.45,.3,z],mat(0xf36b21));const road=labelSprite('ĐƯỜNG NGUYỄN VĂN THỦ','pin');road.position.set(15.1,.5,3.8);road.scale.set(3.6,.65,1);g.add(road);const gate=labelSprite('CỔNG VÀO','pin');gate.position.set(14.1,.8,7.2);g.add(gate);const common=labelSprite('SẢNH CÔNG NGHỆ TƯƠNG TÁC','pin');common.position.set(10.8,.45,2);common.scale.set(3.8,.65,1);g.add(common)}
     const stepMat=mat(0xd27b47,Math.max(.42,layerOpacity));
     const ct1=new THREE.Group();for(let i=0;i<7;i++){addBox(ct1,[.42,.025,.14],[-.27,.04+i*.025,-.46+i*.14],stepMat);addBox(ct1,[.42,.025,.14],[.27,.2-i*.025,.46-i*.14],stepMat)}ct1.position.set(CORES.CT1[0],.08,CORES.CT1[1]);g.add(ct1);
     if(f<7){const ct2=new THREE.Group();for(let i=0;i<7;i++){addBox(ct2,[.14,.025,.42],[-.46+i*.14,.04+i*.025,-.25],stepMat);addBox(ct2,[.14,.025,.42],[.46-i*.14,.2-i*.025,.25],stepMat)}ct2.position.set(CORES.CT2[0],.08,CORES.CT2[1]);g.add(ct2)}
@@ -136,23 +155,24 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
   for(const f of visibleFloors){const pts=opts.route.paths[f];if(!pts)continue;const y=floorY(f)+.34;const lineMat=new THREE.MeshBasicMaterial({color:0xff6418});for(let i=1;i<pts.length;i++){const a=new THREE.Vector3(pts[i-1][0],y,pts[i-1][1]),b=new THREE.Vector3(pts[i][0],y,pts[i][1]);if(a.distanceTo(b)<.03)continue;const curve=new THREE.LineCurve3(a,b);root.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.045,7,false),lineMat));const dir=b.clone().sub(a).normalize();for(let q=0;q<2;q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a,b,phase:q*.5+i*.13})}}}
   if(opts.floor===null&&opts.route.floors.length===2){const core=CORES[opts.route.mode as keyof typeof CORES];const [a,b]=opts.route.floors;const ya=floorY(a)+.34,yb=floorY(b)+.34;const geo=new THREE.CylinderGeometry(.045,.045,Math.abs(yb-ya),10);const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xff6418}));m.position.set(core[0],(ya+yb)/2,core[1]);root.add(m);const from=new THREE.Vector3(core[0],ya,core[1]),to=new THREE.Vector3(core[0],yb,core[1]);const dir=to.clone().sub(from).normalize();for(let q=0;q<Math.max(3,Math.ceil(Math.abs(yb-ya)/.7));q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a:from,b:to,phase:q/Math.max(3,Math.ceil(Math.abs(yb-ya)/.7))})}}
   const addPin=(point:P,floor:number,text:string,color:number)=>{if(!shownFloors.includes(floor))return;const y=floorY(floor);const pin=new THREE.Group();const ball=new THREE.Mesh(new THREE.SphereGeometry(.13,14,10),new THREE.MeshBasicMaterial({color}));ball.position.y=.57;pin.add(ball);const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,8,20),new THREE.MeshBasicMaterial({color}));ring.rotation.x=Math.PI/2;ring.position.y=.34;pin.add(ring);pin.position.set(point[0],y,point[1]);root.add(pin);if(color===0xf04438){const label=labelSprite(text,'pin');label.position.set(point[0],y+.95,point[1]);root.add(label)}};
-  addPin(opts.start.point,opts.start.floor,'BẠN ĐANG Ở ĐÂY',0xf04438);const destination=ROOMS.find(r=>r.id===opts.dest)!;addPin(destination.door,destination.floor,`ĐẾN · ${opts.dest}`,0xf36b21);
+  const destination=ROOMS.find(r=>r.id===opts.dest);if(destination&&opts.route.floors.length){addPin(opts.route.paths[opts.start.floor]?.[0]??opts.start.point,opts.start.floor,'BẠN ĐANG Ở ĐÂY',0xf04438);const path=opts.route.paths[destination.floor];addPin(path?.[path.length-1]??destination.door,destination.floor,`ĐẾN · ${opts.dest}`,0xf36b21)}
   const grid=new THREE.GridHelper(36,36,0x374046,0x252b2f);grid.position.y=-.2;scene.add(grid);
   renderer.domElement.style.display='block';renderer.domElement.style.maxWidth='100%';
-  let id=0;const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,true);camera.aspect=w/h;camera.updateProjectionMatrix()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
+  let id=0;const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,true);camera.aspect=w/h;camera.updateProjectionMatrix();const radius=shownFloors.includes(0)?9.4:Math.hypot(5.3,4,(shownFloors.length-1)*spacing/2);const fit=radius/Math.sin(THREE.MathUtils.degToRad(19))*Math.max(1,1/camera.aspect);camera.position.copy(controls.target).add(new THREE.Vector3(1,.8,1.3).normalize().multiplyScalar(Math.min(46,fit)));controls.update()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
   const started=performance.now();const animate=()=>{id=requestAnimationFrame(animate);const t=(performance.now()-started)/1000;movingArrows.forEach(a=>a.mesh.position.copy(a.a).lerp(a.b,(t*.42+a.phase)%1));controls.update();renderer.render(scene,camera)};animate();
   let pointerStart:P=[0,0];const down=(e:PointerEvent)=>{pointerStart=[e.clientX,e.clientY]};const click=(e:PointerEvent)=>{if(e.button!==0||Math.hypot(e.clientX-pointerStart[0],e.clientY-pointerStart[1])>5)return;const rect=renderer.domElement.getBoundingClientRect();const mouse=new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-((e.clientY-rect.top)/rect.height)*2+1);const ray=new THREE.Raycaster();ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects(root.children,true).find(x=>x.object.userData.room);if(hit)window.dispatchEvent(new CustomEvent('campus-room',{detail:hit.object.userData.room}))};renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointerup',click);
   return ()=>{cancelAnimationFrame(id);ro.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointerup',click);controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();const material=(o as THREE.Mesh).material;if(material){(Array.isArray(material)?material:[material]).forEach(x=>x.dispose())}});renderer.dispose();renderer.domElement.remove()};
 }
 
 function MiniPlan({floor,dest,route}:{floor:number;dest:string;route:RouteData}){
-  return <svg viewBox="0 0 1015 620" className="mini-plan" aria-label={`Mặt bằng ${FLOOR_LABELS[floor]}`}>
-    <defs><marker id="route-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="15" markerHeight="15" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#fff4eb"/></marker></defs>
-    <rect x="18" y="18" width="804" height="584" rx="12" className="plan-shell"/><path d="M70 203H460M460 131V535M460 366H620M620 366V535M460 419H487" className="plan-corridor"/>
-    {ROOMS.filter(r=>r.floor===floor).map(r=>{const [x1,z1,x2,z2]=r.box;return <g key={r.id}><rect x={25+x1*76} y={25+z1*75} width={(x2-x1)*76} height={(z2-z1)*75} rx="5" className={r.id===dest?'plan-room selected':'plan-room'}/><text x={25+(x1+x2)*38} y={25+(z1+z2)*37.5}>{r.id}</text><circle cx={25+r.door[0]*76} cy={25+r.door[1]*75} r="6" className="door"/></g>})}
-    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}{floor<7&&<><rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>THANG MÁY</text></>}<text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
-    <g className="plan-context"><rect x="875" y="25" width="115" height="570" rx="8"/><path d="M932 40V580" strokeDasharray="18 14"/><text transform="translate(967 310) rotate(-90)">ĐƯỜNG NGUYỄN VĂN THỦ</text><path d="M810 392H875" className="gate-link"/><path d="M825 370V414M849 370V414" className="gate-post"/><text x="840" y="350" className="gate-caption">{floor===0?'CỔNG VÀO':'CỔNG TẦNG TRỆT'}</text><text x="315" y="75" className="common-space">{commonSpaceName(floor)}</text></g>
-    {route.paths[floor]&&<polyline points={route.paths[floor].map(([x,z])=>`${25+x*76},${25+z*75}`).join(' ')} className="plan-route" markerMid="url(#route-arrow)" markerEnd="url(#route-arrow)"/>}
+  const markerId=useId();
+  return <svg viewBox={floor===0?"0 0 1350 730":"0 0 1015 620"} className="mini-plan" aria-label={`Mặt bằng ${FLOOR_LABELS[floor]}`}>
+    <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="15" markerHeight="15" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#fff4eb"/></marker></defs>
+    <rect x="18" y="18" width={floor===0?1110:804} height={floor===0?690:584} rx="12" className="plan-shell"/>{floor!==0&&<path d="M70 203H460M460 131V535M460 366H620M620 366V535M460 419H487" className="plan-corridor"/>}
+    {ROOMS.filter(r=>r.floor===floor).map(r=>{const [x1,z1,x2,z2]=r.box;return <g key={r.id}>{r.outline?<polygon points={r.outline.map(([x,z])=>`${25+x*76},${25+z*75}`).join(" ")} className={r.id===dest?'plan-room selected':'plan-room'}/>:<rect x={25+x1*76} y={25+z1*75} width={(x2-x1)*76} height={(z2-z1)*75} rx="5" className={r.id===dest?'plan-room selected':'plan-room'}/>}<text x={25+(x1+x2)*38} y={25+(z1+z2)*37.5}>{r.id}</text>{(r.doors??[r.door]).map((door,i)=><circle key={i} cx={25+door[0]*76} cy={25+door[1]*75} r="6" className="door"/>)}</g>})}
+    <rect x={25+5.95*76} y={25+3.12*75} width={1.2*76} height={.95*75} className="core"/><text x={25+6.55*76} y={25+3.65*75}>CT1</text>{floor<7&&<><rect x={25+.78*76} y={25+.98*75} width={1.45*76} height={.84*75} className="core"/><text x={25+1.5*76} y={25+1.46*75}>CT2 ↔</text></>}{floor<7&&<><rect x={25+6.08*76} y={25+4.88*75} width={.84*76} height={.75*75} className="lift"/><text x={25+6.5*76} y={25+5.3*75}>TM</text></>}<text x={25+6.15*76} y={25+6.35*75} className="facility-label">WC NAM</text><text x={25+7.35*76} y={25+6.35*75} className="facility-label">WC NỮ</text>
+    <g className="plan-context" transform={floor===0?"translate(310 70)":undefined}><rect x="875" y="25" width="115" height="570" rx="8"/><path d="M932 40V580" strokeDasharray="18 14"/><text transform="translate(967 310) rotate(-90)">ĐƯỜNG NGUYỄN VĂN THỦ</text><path d={floor===0?"M810 495H875":"M810 392H875"} className="gate-link"/><path d={floor===0?"M825 473V517M849 473V517":"M825 370V414M849 370V414"} className="gate-post"/><text x="840" y={floor===0?453:350} className="gate-caption">{floor===0?'CỔNG VÀO':'CỔNG TẦNG TRỆT'}</text><text x="315" y="75" className="common-space">{commonSpaceName(floor)}</text></g>
+    {route.paths[floor]&&<polyline points={route.paths[floor].map(([x,z])=>`${25+x*76},${25+z*75}`).join(' ')} className="plan-route" markerMid={`url(#${markerId})`} markerEnd={`url(#${markerId})`}/>}
   </svg>
 }
 
@@ -322,23 +342,38 @@ function RoomProfile({room}:{room:Room}){
   return <section className="room-profile" aria-label="Hồ sơ phòng đã chọn"><div className="room-profile-copy"><small>02 / HỒ SƠ PHÒNG</small><div className="profile-id">{room.id}<span>{FLOOR_LABELS[room.floor]}</span></div><h2>{room.name}</h2><p>{description}</p><dl><div><dt>Tiếp cận</dt><dd>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':`Theo tuyến đường đến cửa phòng tại ${FLOOR_LABELS[room.floor]}`}</dd></div><div><dt>Nội thất & thiết bị</dt><dd>{room.id==='E104'?'Bàn học đôi · màn hình di động · 3 máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bố trí lớp học cơ bản · bàn ghế · bảng trắng · bàn giáo viên'}</dd></div></dl>{['E104','E102','E401'].includes(room.id)&&<RoomRenderGallery key={room.id} id={room.id}/>}</div><RoomPreview room={room}/></section>
 }
 
+function RoomDetail({room,route,onClose}:{room:Room;route:RouteData;onClose:()=>void}){
+  const dialog=useRef<HTMLDialogElement>(null);
+  const equipment=room.id==='E104'?['Màn hình trình chiếu di động','Máy tính và bàn làm việc','Bàn học, kệ trưng bày và tủ hồ sơ']:room.id==='E102'?['Màn hình trình chiếu','Bàn học và bàn máy tính','Vách lưới trưng bày, kệ học liệu']:room.id==='E401'?['Máy tính và bàn mô hình','Xe đạp tương tác minh họa','Bàn học và khu trình chiếu']:['Bàn ghế học tập','Bảng trắng','Bàn giáo viên'];
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>previous?.focus()},[]);
+  return <dialog ref={dialog} className="room-detail-dialog" onCancel={onClose} aria-labelledby="detail-title">
+    <header><button className="journey-back" onClick={onClose}>← Trở về bước điều hướng</button><span>MẶT BẰNG · {FLOOR_LABELS[room.floor]}</span></header>
+    <div className="detail-layout"><div className="detail-plan"><MiniPlan floor={room.floor} dest={room.id} route={route}/><p>Cam: phòng đang xem · Chấm sáng: cửa vào · CT1 / CT2: cầu thang bộ</p></div>
+    <section><small>{room.id} · {commonSpaceName(room.floor)}</small><h2 id="detail-title">{room.name}</h2><h3>Chức năng & hoạt động nghiên cứu</h3><p>{ROOM_CATALOGUE[room.id]?.description}</p><h3>Khám phá không gian</h3><p>{['E104','E102','E401'].includes(room.id)?'Ảnh thiết kế minh họa bên dưới. Phần tham quan 3D có các điểm tương tác với nội thất và thiết bị.':'Phòng hiện sử dụng bố trí nội thất minh họa cơ bản; chưa có ảnh thiết kế riêng.'}</p>{['E104','E102','E401'].includes(room.id)&&<RoomRenderGallery key={room.id} id={room.id}/>}</section></div>
+    <section className="detail-equipment"><h3>Nội thất & thiết bị trong bản minh họa</h3><ul>{equipment.map(item=><li key={item}>{item}</li>)}</ul><p>Danh sách này mô tả mô hình tham quan, không phải biên bản kiểm kê thiết bị thực tế.</p></section>
+  </dialog>
+}
+
 export default function CampusEMap(){
-  const host=useRef<HTMLDivElement>(null);const [startId,setStartId]=useState('ENTRY');const [destId,setDestId]=useState('E104');const [exploded,setExploded]=useState(true);const [oneFloor,setOneFloor]=useState<number|null>(null);const [showAll,setShowAll]=useState(true);
-  const start=STARTS.find(p=>p.id===startId)!;const dest=ROOMS.find(r=>r.id===destId)!;const route=useMemo(()=>routeFor(start,dest),[start,dest]);
-  useEffect(()=>{const f=(e:Event)=>{const id=(e as CustomEvent<string>).detail;setDestId(id);setOneFloor(ROOMS.find(r=>r.id===id)?.floor??null)};window.addEventListener('campus-room',f);return()=>window.removeEventListener('campus-room',f)},[]);
-  useEffect(()=>{if(!host.current)return;return buildScene(host.current,{exploded,floor:oneFloor,showAll,dest:destId,start,route})},[exploded,oneFloor,showAll,destId,start,route]);
+  const host=useRef<HTMLDivElement>(null);const [startId,setStartId]=useState('');const [destId,setDestId]=useState('');const [detailId,setDetailId]=useState<string|null>(null);const [exploded,setExploded]=useState(true);const [oneFloor,setOneFloor]=useState<number|null>(null);const [showAll,setShowAll]=useState(true);
+  const start=STARTS.find(p=>p.id===startId)??PLACES[0];const dest=ROOMS.find(r=>r.id===destId)??ROOMS[0];const hasRoute=!!startId&&!!destId;const route=useMemo<RouteData>(()=>hasRoute?routeFor(start,dest):{mode:'WALK',floors:[],paths:{},steps:[]},[start,dest,hasRoute]);
+  const resetJourney=()=>{setStartId('');setDestId('');setOneFloor(null);setShowAll(true);setExploded(true);setDetailId(null)};
+  useEffect(()=>{const f=(e:Event)=>{const id=(e as CustomEvent<string>).detail;setDetailId(id)};window.addEventListener('campus-room',f);return()=>window.removeEventListener('campus-room',f)},[]);
+  useEffect(()=>{if(!host.current)return;return buildScene(host.current,{exploded,floor:oneFloor,showAll:showAll||!hasRoute,dest:destId,start,route})},[exploded,oneFloor,showAll,destId,start,route]);
   return <main className="app-shell">
     <header className="topbar"><img src={`${import.meta.env.BASE_URL}tch-logo-lockup.png`} alt="Technology Convergence Hub" width={152} height={48}/><div><span>WAYFINDING PROTOTYPE</span><b>CAMPUS E · UEH</b></div><div className="status"><i/> LIVE PROTOTYPE</div></header>
     <section className="intro"><div><small>01 / DIGITAL CAMPUS</small><h1><span>Đi đúng cửa.</span><em>Đúng tầng.</em></h1></div><p>Mô hình thử nghiệm được dựng lại từ mặt bằng Cơ sở E: phòng có màu, cửa vào, hai lõi thang CT1–CT2 và thang máy theo đúng <span className="keep-together">tầng dừng.</span></p></section>
     <section className="workspace">
-      <aside className="panel controls-panel"><div className="panel-title"><LocateFixed/> CHỌN HÀNH TRÌNH</div><label>Vị trí hiện tại<select value={startId} onChange={e=>{setStartId(e.target.value);setOneFloor(null);setShowAll(false)}}><optgroup label="Lối vào">{PLACES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</optgroup><optgroup label="Các phòng">{STARTS.slice(PLACES.length).map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</optgroup></select></label><label>Phòng cần đến<select value={destId} onChange={e=>{setDestId(e.target.value);setOneFloor(null);setShowAll(false)}}>{allDestinations.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
-        <div className="room-card"><span>{FLOOR_LABELS[dest.floor]}</span><div><small>PHÒNG ĐÃ CHỌN</small><strong>{dest.id}</strong><p>{dest.name}</p></div></div>
+      <aside className="panel controls-panel"><div className="panel-title"><LocateFixed/> CHỌN HÀNH TRÌNH</div><label>Vị trí hiện tại<select value={startId} onChange={e=>{setStartId(e.target.value);setOneFloor(null);setShowAll(false)}}><option value="">Chọn vị trí bắt đầu</option><optgroup label="Lối vào">{PLACES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</optgroup><optgroup label="Các phòng">{STARTS.slice(PLACES.length).map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</optgroup></select></label><label>Phòng cần đến<select value={destId} onChange={e=>{setDestId(e.target.value);setOneFloor(null);setShowAll(false)}}><option value="">Chọn phòng cần đến</option>{allDestinations.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
+        <button className="journey-back" onClick={resetJourney}>← Chọn lại từ đầu</button>{destId&&<div className="room-card" role="button" tabIndex={0} onClick={()=>setDetailId(destId)} onKeyDown={e=>{if(e.key==='Enter')setDetailId(destId)}}><span>{FLOOR_LABELS[dest.floor]}</span><div><small>PHÒNG ĐÃ CHỌN</small><strong>{dest.id}</strong><p>{dest.name}</p></div></div>}
         <div className="legend"><b>CHÚ THÍCH</b><span><i className="lab"/>Phòng LAB</span><span><i className="class"/>Phòng học</span><span><i className="stair"/>CT1 / CT2</span><span><i className="lift"/>Thang máy</span><span><i className="wc"/>WC Nam / Nữ</span><span><i className="selected"/>Điểm đến</span><span><i className="route"/>Tuyến đường di chuyển</span></div>
       </aside>
       <div className="map-stage"><div className="stage-tools"><button className={showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(true)}}><Building2/>Toàn bộ tòa nhà</button><button className={!showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(false)}}><Route/>Tầng của tuyến</button><button onClick={()=>setExploded(v=>!v)}><Layers3/>{exploded?'Gộp tầng':'Tách tầng'}</button><span><Rotate3D/> Kéo trái: di chuyển · kéo phải: xoay · cuộn: thu phóng</span></div><div ref={host} className="three-host"/><nav className="floor-rail">{FLOOR_LABELS.map((f,i)=><button key={f} className={oneFloor===i?'active':''} onClick={()=>{setOneFloor(i);setShowAll(false)}}>{f}</button>)}</nav></div>
-      <aside className="panel route-panel"><div className="panel-title"><Route/> TUYẾN ĐƯỜNG</div><h2>{start.label}<ChevronRight/>{dest.id}</h2><div className="destination-summary"><small>PHÒNG ĐẾN · {dest.id}</small><h3>{dest.name}</h3><p>{ROOM_CATALOGUE[dest.id]?.description}</p></div><div className="route-mode"><Navigation/>{route.mode==='LIFT'?'THANG MÁY':route.mode==='WALK'?'CÙNG TẦNG':`CẦU THANG ${route.mode}`}</div><ol>{route.steps.map((s,i)=><li key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></li>)}</ol><div className="mini-head"><Map/> MẶT BẰNG TẦNG · {FLOOR_LABELS[dest.floor]}</div><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></aside>
+      <aside className="panel route-panel"><div className="panel-title"><Route/> TUYẾN ĐƯỜNG</div>{hasRoute?<><h2>{start.label}<ChevronRight/>{dest.id}</h2><div className="destination-summary"><small>PHÒNG ĐẾN · {dest.id}</small><h3>{dest.name}</h3><p>{ROOM_CATALOGUE[dest.id]?.description}</p></div><div className="route-mode"><Navigation/>{route.mode==='LIFT'?'THANG MÁY':route.mode==='WALK'?'CÙNG TẦNG':`CẦU THANG ${route.mode}`}</div><ol>{route.steps.map((s,i)=><li key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></li>)}</ol><div className="mini-head"><Map/> MẶT BẰNG TẦNG · {FLOOR_LABELS[dest.floor]}</div><button className="journey-back" onClick={()=>setDetailId(dest.id)}>Mở mặt bằng & thông tin phòng ↗</button><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></>:<div className="destination-summary"><h3>Khám phá Campus E</h3><p>Chọn vị trí hiện tại và phòng cần đến để tìm đường. Bấm vào một phòng trên mô hình để mở mặt bằng và tìm hiểu không gian.</p></div>}</aside>
     </section>
-    <RoomProfile room={dest}/>
+    {destId&&<RoomProfile room={dest}/>}
+    {detailId&&<RoomDetail room={ROOMS.find(r=>r.id===detailId)!} route={route} onClose={()=>setDetailId(null)}/>}
     <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình. <span>PDF SOURCE · CAMPUS E</span></footer>
   </main>
 }
+
