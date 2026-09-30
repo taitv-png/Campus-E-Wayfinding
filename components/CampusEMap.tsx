@@ -6,7 +6,7 @@ import { ROOM_CATALOGUE, commonSpaceName } from './room-catalogue';
 import { createRoom104, createStudent, ROOM_ITEMS, ROOM104 } from './room104-scene';
 import { createTeachingRoom, createHallway, type TourItem, type Portal } from './campus-tour-scene';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Building2, ChevronRight, Footprints, LocateFixed, Map, Navigation, Route, Rotate3D } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronRight, Footprints, LocateFixed, Map, Navigation, RotateCcw, Route, Rotate3D } from 'lucide-react';
 
 type P = [number, number];
 type Room = { id:string; name:string; floor:number; box:[number,number,number,number]; door:P; doors?:P[]; outline?:P[]; kind:'lab'|'class'|'support' };
@@ -132,25 +132,64 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
   scene.add(new THREE.HemisphereLight(0xdde8ea,0x1a1410,2.1)); const sun=new THREE.DirectionalLight(0xffe5d2,3.4);sun.position.set(8,15,10);sun.castShadow=true;scene.add(sun);
   const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.1;controls.rotateSpeed=.34;controls.zoomSpeed=.48;controls.enablePan=true;controls.panSpeed=.65;controls.screenSpacePanning=true;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};controls.target.set(shownFloors.includes(0)?2.7:.5,opts.floor===null?(shownFloors.length-1)*spacing/2:.3,3.6);controls.minDistance=7;controls.maxDistance=48;
   const root=new THREE.Group();root.position.x=-4.6;scene.add(root);
+  const idleCampus=opts.floor===null&&opts.showAll&&opts.route.floors.length===0;
+  if(idleCampus){const focus=new THREE.PointLight(0xffb078,5.2,24,2);focus.position.set(.5,7.5,4);scene.add(focus)}
   const mat=(color:number,opacity=1)=>new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.04,transparent:opacity<.999,opacity,depthWrite:opacity>.8});
   const addBox=(parent:THREE.Object3D,size:[number,number,number],pos:[number,number,number],material:THREE.Material)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m};
   FLOOR_LABELS.forEach((fl,f)=>{
     if(!shownFloors.includes(f))return; const y=floorY(f);
     const g=new THREE.Group();g.position.y=y;root.add(g);
     const involved=opts.route.floors.includes(f),stackIndex=shownFloors.indexOf(f),isUpper=stackIndex>0;
-    const layerOpacity=opts.floor!==null?.98:opts.showAll?(involved?(isUpper?.58:.88):Math.max(.18,.34-stackIndex*.025)):(isUpper?.56:.94);
-    addBox(g,f===0?[14.6,.055,9]:[10.35,.055,7.4],f===0?[7.2,0,4.4]:[5.1,0,3.6],mat(involved?0xe5e4df:0x757b7d,Math.min(layerOpacity+.04,.96)));
+    const layerOpacity=opts.floor!==null?.98:opts.showAll?(idleCampus?Math.max(.38,.74-stackIndex*.045):involved?(isUpper?.58:.88):Math.max(.18,.34-stackIndex*.025)):(isUpper?.56:.94);
+    addBox(g,f===0?[13.1,.055,9]:[10.35,.055,7.4],f===0?[6.45,0,4.4]:[5.1,0,3.6],mat(involved||idleCampus?0xe5e4df:0x757b7d,Math.min(layerOpacity+.04,.96)));
     ROOMS.filter(r=>r.floor===f).forEach(r=>{const [x1,z1,x2,z2]=r.box;const selected=r.id===opts.dest;const roomOpacity=selected?.98:layerOpacity;const m=addBox(g,[x2-x1-.08,.16,z2-z1-.08],[(x1+x2)/2,.12,(z1+z2)/2],mat(selected?0xff6b2c:(r.kind==='class'?0xa8b5c0:0x5e8fb8),roomOpacity));m.userData.room=r.id;if(r.outline){m.visible=false;const shape=new THREE.Shape();r.outline.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));shape.closePath();const mesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.16,bevelEnabled:false}),m.material);mesh.rotation.x=-Math.PI/2;mesh.position.y=.04;mesh.userData.room=r.id;g.add(mesh)}
       (r.doors??[r.door]).forEach(door=>addBox(g,same(door[1],z1)?[.32,.018,.07]:[.07,.018,.32],[door[0],.225,door[1]],mat(0xffd2ad)));
       if(selected){const l=labelSprite(r.id,'selected');l.position.set((x1+x2)/2,.82,(z1+z2)/2);l.userData.room=r.id;g.add(l)}
     });
-    if(f===0){addBox(g,[1.35,.04,9.6],[15.2,-.015,4.4],mat(0x35474f,.9));for(let z=.2;z<9;z+=1.1)addBox(g,[.045,.012,.5],[15.2,.02,z],mat(0xa9b6bb,.8));for(const z of [6.65,7.75])addBox(g,[.15,.6,.15],[14.45,.3,z],mat(0xff6b2c));const road=labelSprite('ĐƯỜNG NGUYỄN VĂN THỦ','pin');road.position.set(15.1,.5,3.8);road.scale.set(3.6,.65,1);g.add(road);const gate=labelSprite('CỔNG VÀO','pin');gate.position.set(14.1,.8,7.2);g.add(gate);const common=labelSprite('SẢNH CÔNG NGHỆ TƯƠNG TÁC','pin');common.position.set(10.8,.45,2);common.scale.set(3.8,.65,1);g.add(common)}
+    if(f===0){for(const z of [6.65,7.75])addBox(g,[.15,.6,.15],[13.18,.3,z],mat(0xff6b2c));const gate=labelSprite('CỔNG VÀO','pin');gate.position.set(13.15,.8,7.2);g.add(gate);const common=labelSprite('SẢNH CÔNG NGHỆ TƯƠNG TÁC','pin');common.position.set(10.8,.45,2);common.scale.set(3.8,.65,1);g.add(common)}
     const stepMat=mat(0xd27b47,Math.max(.42,layerOpacity));
     const ct1=new THREE.Group();for(let i=0;i<7;i++){addBox(ct1,[.42,.025,.14],[-.27,.04+i*.025,-.46+i*.14],stepMat);addBox(ct1,[.42,.025,.14],[.27,.2-i*.025,.46-i*.14],stepMat)}ct1.position.set(CORES.CT1[0],.08,CORES.CT1[1]);g.add(ct1);
     if(f<7){const ct2=new THREE.Group();for(let i=0;i<7;i++){addBox(ct2,[.14,.025,.42],[-.46+i*.14,.04+i*.025,-.25],stepMat);addBox(ct2,[.14,.025,.42],[.46-i*.14,.2-i*.025,.25],stepMat)}ct2.position.set(CORES.CT2[0],.08,CORES.CT2[1]);g.add(ct2)}
     const amenity=(text:string,p:P,color:number)=>{addBox(g,[.72,.12,.62],[p[0],.1,p[1]],mat(color,Math.max(.38,layerOpacity)));if(text.startsWith('WC')&&(involved||opts.floor!==null)){const s=restroomSprite(text==='WC NỮ');s.position.set(p[0],.48,p[1]);g.add(s)}};
     amenity('CT1',CORES.CT1,0xa9855f);if(f<7){amenity('CT2',CORES.CT2,0xa9855f);amenity([0,4,5,6].includes(f)?'LIFT':'LIFT · NO STOP',CORES.LIFT,[0,4,5,6].includes(f)?0x8b7cf6:0x704048)}amenity('WC NAM',[6.15,6.25],0x687176);amenity('WC NỮ',[7.15,6.25],0x687176);
   });
+  const contextCars:{object:THREE.Group;speed:number;direction:number;min:number;max:number;lane:number;distance:number}[]=[],contextWalkers:{npc:ReturnType<typeof createStudent>;speed:number;direction:number;min:number;max:number}[]=[],crossingWalkers:{npc:ReturnType<typeof createStudent>;baseDirection:number;offset:number;z:number}[]=[];
+  let vehicleSignals:{red:THREE.MeshStandardMaterial;yellow:THREE.MeshStandardMaterial;green:THREE.MeshStandardMaterial}|null=null;
+  if(opts.floor===null&&opts.showAll){
+    const context=new THREE.Group();root.add(context);
+    addBox(context,[36,.08,28],[8,-.24,4.4],mat(0x202825,.96));
+    addBox(context,[4,.07,28],[16.5,-.15,4.4],mat(0x252c30,.98));
+    for(let z=-8;z<17;z+=1.7)addBox(context,[.07,.018,.82],[16.5,-.10,z],mat(0xc9c2b7,.68));
+    const crossing=mat(0xf1eee7,.9);for(let i=0;i<11;i++)addBox(context,[.17,.02,1.55],[14.82+i*.335,-.095,7.2],crossing);
+    addBox(context,[1.55,.022,.12],[15.5,-.092,6.25],crossing);addBox(context,[1.55,.022,.12],[17.5,-.092,8.15],crossing);
+    const laneMarking=mat(0xe7e0d5,.72);
+    for(const [x,direction] of [[15.5,1],[17.5,-1]] as const)for(const z of [-4,4,12]){addBox(context,[.07,.018,.48],[x,-.10,z],laneMarking);const arrowHead=new THREE.Mesh(new THREE.ConeGeometry(.14,.3,3),laneMarking);arrowHead.rotation.x=direction>0?Math.PI/2:-Math.PI/2;arrowHead.position.set(x,-.095,z+direction*.33);context.add(arrowHead)}
+    const sidewalk=mat(0x77736c,.98);
+    addBox(context,[1.2,.16,28],[13.9,-.08,4.4],sidewalk);
+    addBox(context,[1.2,.16,28],[19.1,-.08,4.4],sidewalk);
+    addBox(context,[1.5,.17,1.48],[13.65,-.07,7.2],sidewalk);
+    vehicleSignals={red:new THREE.MeshStandardMaterial({color:0x3a2424,emissive:0x000000,roughness:.45}),yellow:new THREE.MeshStandardMaterial({color:0x39321d,emissive:0x000000,roughness:.45}),green:new THREE.MeshStandardMaterial({color:0x1f372b,emissive:0x1f9d62,emissiveIntensity:2.8,roughness:.45})};
+    const addTrafficLight=(x:number,z:number,rotation:number)=>{const signal=new THREE.Group(),pole=new THREE.Mesh(new THREE.CylinderGeometry(.045,.065,1.8,10),mat(0x252c2f));pole.position.y=.9;signal.add(pole);addBox(signal,[.34,.88,.28],[0,1.68,0],mat(0x111719));for(const [y,material] of [[1.94,vehicleSignals!.red],[1.68,vehicleSignals!.yellow],[1.42,vehicleSignals!.green]] as const){const lamp=new THREE.Mesh(new THREE.SphereGeometry(.085,12,8),material);lamp.position.set(0,y,.15);signal.add(lamp)}signal.position.set(x,0,z);signal.rotation.y=rotation;context.add(signal)};
+    addTrafficLight(14.34,6.25,0);addTrafficLight(18.66,8.15,Math.PI);
+    const trunk=mat(0x5b3d2c),leafColors=[mat(0x506b4d),mat(0x627753),mat(0x3f6655)];
+    const addTree=(x:number,z:number,scale=1,color=0)=>{const tree=new THREE.Group();const stem=new THREE.Mesh(new THREE.CylinderGeometry(.10*scale,.16*scale,1.15*scale,7),trunk);stem.position.y=.57*scale;const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(.62*scale,1),leafColors[color%leafColors.length]);crown.position.y=1.42*scale;tree.add(stem,crown);tree.position.set(x,0,z);context.add(tree)};
+    for(let z=-6.8,i=0;z<16.8;z+=2.35,i++){if(Math.abs(z-7.2)>.8)addTree(13.48,z,.68+(i%2)*.08,i+1);addTree(19.5,z+.55,.68+((i+1)%2)*.08,i+2)}
+    const addContextBuilding=(x:number,z:number,w:number,d:number,h:number,color:number)=>addBox(context,[w,h,d],[x,h/2-.2,z],mat(color,.15));
+    addContextBuilding(-4.3,4.5,4.8,7.0,2.6,0x56636a);
+    addContextBuilding(4.5,-5.2,8.2,3.8,2.8,0x3f4b52);
+    addContextBuilding(4.8,14.3,8.8,4.3,3.5,0x47535a);
+    addContextBuilding(22.8,-4.0,5.3,4.7,3.2,0x445159);
+    addContextBuilding(23.1,2.2,5.8,5.1,4.0,0x4a555d);
+    addContextBuilding(22.7,9.0,5.1,5.4,3.4,0x3f4c54);
+    addContextBuilding(23.0,15.2,5.7,4.4,2.9,0x48555c);
+    const carColors=[0xff6b2c,0xd9d7d1,0x4e7184,0xb54c45,0xd1a33b,0x668563];
+    const roadMin=-7.4,roadMax=16.2,laneConfigs=[{x:15.5,direction:1,speed:.864},{x:17.5,direction:-1,speed:.768}];
+    laneConfigs.forEach((lane,laneIndex)=>{for(let slot=0;slot<3;slot++){const color=carColors[laneIndex*3+slot],car=new THREE.Group(),distance=slot/3*(roadMax-roadMin);addBox(car,[1.55,.38,.72],[0,.25,0],mat(color));addBox(car,[.88,.32,.62],[-.08,.57,-.02],mat(0x26343a,.94));for(const z of [-.24,.24])addBox(car,[.05,.11,.13],[.79,.28,z],mat(0xfff0c7));for(const x of [-.55,.55])for(const z of [-.38,.38]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.10,10),mat(0x111719));wheel.rotation.z=Math.PI/2;wheel.position.set(x,.15,z);car.add(wheel)}car.position.set(lane.x,0,lane.direction>0?roadMin+distance:roadMax-distance);car.rotation.y=lane.direction>0?-Math.PI/2:Math.PI/2;context.add(car);contextCars.push({object:car,speed:lane.speed,direction:lane.direction,min:roadMin,max:roadMax,lane:laneIndex,distance})}});
+    const variants=['casual-male','casual-female','male','casual-female','casual-male','female','casual-female','casual-male','female','casual-male'] as const;
+    variants.forEach((variant,i)=>{const npc=createStudent(scene,variant,i+2);context.add(npc.root);npc.root.scale.setScalar(.49+(i%2)*.025);const outer=i>=5,laneSlot=i%5;npc.root.position.set(outer?18.82+(laneSlot%2)*.18:13.86+(laneSlot%2)*.18,0,-5.5+laneSlot*4.2);const direction=(i+laneSlot)%2?1:-1;npc.root.rotation.y=direction>0?0:Math.PI;contextWalkers.push({npc,speed:.25+(i%3)*.035,direction,min:-6.3,max:15.8})});
+    const crossingVariants=['casual-female','casual-male','female','casual-male'] as const;
+    crossingVariants.forEach((variant,i)=>{const npc=createStudent(scene,variant,i+12);context.add(npc.root);npc.root.scale.setScalar(.58+(i%2)*.025);const baseDirection=i%2? -1:1,z=6.78+i*.27;npc.root.position.set(baseDirection>0?14.05:18.95,0,z);npc.root.rotation.y=baseDirection>0?Math.PI/2:-Math.PI/2;crossingWalkers.push({npc,baseDirection,offset:i*.32,z})});
+  }
   const movingArrows:{mesh:THREE.Mesh;a:THREE.Vector3;b:THREE.Vector3;phase:number}[]=[];const visibleFloors=opts.floor===null?opts.route.floors:[opts.floor];
   for(const f of visibleFloors){const pts=opts.route.paths[f];if(!pts)continue;const y=floorY(f)+.34;const lineMat=new THREE.MeshBasicMaterial({color:0xff6b2c});for(let i=1;i<pts.length;i++){const a=new THREE.Vector3(pts[i-1][0],y,pts[i-1][1]),b=new THREE.Vector3(pts[i][0],y,pts[i][1]);if(a.distanceTo(b)<.03)continue;const curve=new THREE.LineCurve3(a,b);root.add(new THREE.Mesh(new THREE.TubeGeometry(curve,8,.045,7,false),lineMat));const dir=b.clone().sub(a).normalize();for(let q=0;q<2;q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a,b,phase:q*.5+i*.13})}}}
   if(opts.floor===null&&opts.route.floors.length===2){const core=CORES[opts.route.mode as keyof typeof CORES];const [a,b]=opts.route.floors;const ya=floorY(a)+.34,yb=floorY(b)+.34;const geo=new THREE.CylinderGeometry(.045,.045,Math.abs(yb-ya),10);const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xff6b2c}));m.position.set(core[0],(ya+yb)/2,core[1]);root.add(m);const from=new THREE.Vector3(core[0],ya,core[1]),to=new THREE.Vector3(core[0],yb,core[1]);const dir=to.clone().sub(from).normalize();for(let q=0;q<Math.max(3,Math.ceil(Math.abs(yb-ya)/.7));q++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(.105,.25,9),new THREE.MeshBasicMaterial({color:0xfff0e6}));arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);root.add(arrow);movingArrows.push({mesh:arrow,a:from,b:to,phase:q/Math.max(3,Math.ceil(Math.abs(yb-ya)/.7))})}}
@@ -158,10 +197,19 @@ function buildScene(host:HTMLDivElement, opts:{exploded:boolean;floor:number|nul
   const destination=ROOMS.find(r=>r.id===opts.dest);if(destination&&opts.route.floors.length){addPin(opts.route.paths[opts.start.floor]?.[0]??opts.start.point,opts.start.floor,'BẠN ĐANG Ở ĐÂY',0x5eead4);const path=opts.route.paths[destination.floor];addPin(path?.[path.length-1]??destination.door,destination.floor,`ĐẾN · ${opts.dest}`,0xff6b2c)}
   const grid=new THREE.GridHelper(36,36,0x1d272d,0x131b20);grid.position.y=-.2;scene.add(grid);
   renderer.domElement.style.display='block';renderer.domElement.style.maxWidth='100%';
-  let id=0;const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,true);camera.aspect=w/h;camera.updateProjectionMatrix();const radius=shownFloors.includes(0)?9.4:Math.hypot(5.3,4,(shownFloors.length-1)*spacing/2);const fit=radius/Math.sin(THREE.MathUtils.degToRad(19))*Math.max(1,1/camera.aspect);camera.position.copy(controls.target).add(new THREE.Vector3(1,.8,1.3).normalize().multiplyScalar(Math.min(46,fit)));controls.update()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
-  const started=performance.now();const animate=()=>{id=requestAnimationFrame(animate);const t=(performance.now()-started)/1000;movingArrows.forEach(a=>a.mesh.position.copy(a.a).lerp(a.b,(t*.42+a.phase)%1));controls.update();renderer.render(scene,camera)};animate();
+  let id=0,lastSignal='';const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,true);camera.aspect=w/h;camera.updateProjectionMatrix();if(opts.floor===null&&opts.showAll)controls.target.x=3.5;const radius=opts.floor===null&&opts.showAll?16.2:shownFloors.includes(0)?9.4:Math.hypot(5.3,4,(shownFloors.length-1)*spacing/2);const fit=radius/Math.sin(THREE.MathUtils.degToRad(19))*Math.max(1,1/camera.aspect);camera.position.copy(controls.target).add(new THREE.Vector3(1,.8,1.3).normalize().multiplyScalar(Math.min(52,fit)));controls.update()};resize();const ro=new ResizeObserver(resize);ro.observe(host);
+  const setLamp=(material:THREE.MeshStandardMaterial,on:boolean,color:number)=>{material.color.setHex(on?color:0x242928);material.emissive.setHex(on?color:0x000000);material.emissiveIntensity=on?2.8:0};
+  const started=performance.now();let previous=started;const animate=(now=performance.now())=>{id=requestAnimationFrame(animate);const t=(now-started)/1000,dt=Math.min((now-previous)/1000,.05);previous=now;movingArrows.forEach(a=>a.mesh.position.copy(a.a).lerp(a.b,(t*.42+a.phase)%1));
+    const cycle=t%26,signal=cycle<14||cycle>=25?'green':cycle<16?'yellow':'red',vehicleRed=signal==='red';
+    if(vehicleSignals&&signal!==lastSignal){setLamp(vehicleSignals.red,signal==='red',0xff3b30);setLamp(vehicleSignals.yellow,signal==='yellow',0xffc338);setLamp(vehicleSignals.green,signal==='green',0x35df85);lastSignal=signal}
+    contextCars.forEach(car=>{const span=car.max-car.min,stopDistance=car.direction>0?5.35-car.min:car.max-9.05,next=(car.distance+car.speed*dt)%span,wrapped=next<car.distance;car.distance=vehicleRed&&car.distance<=stopDistance+.001&&!wrapped&&next>=stopDistance?stopDistance:next});
+    if(vehicleRed)for(const lane of [0,1]){const cars=contextCars.filter(car=>car.lane===lane),sample=cars[0];if(!sample)continue;const stopDistance=sample.direction>0?5.35-sample.min:sample.max-9.05;let limit=stopDistance;cars.filter(car=>car.distance<=stopDistance+.001).sort((a,b)=>b.distance-a.distance).forEach(car=>{car.distance=Math.min(car.distance,Math.max(0,limit));limit=car.distance-2.05})}
+    contextCars.forEach(car=>{car.object.position.z=car.direction>0?car.min+car.distance:car.max-car.distance});
+    contextWalkers.forEach((walker,i)=>{walker.npc.root.position.z+=walker.speed*dt*walker.direction;if(walker.npc.root.position.z>walker.max||walker.npc.root.position.z<walker.min){walker.direction*=-1;walker.npc.root.rotation.y=walker.direction>0?0:Math.PI}walker.npc.update(dt,true,t*5+i)});
+    const cycleIndex=Math.floor(t/26);crossingWalkers.forEach((walker,i)=>{const direction=cycleIndex%2?-walker.baseDirection:walker.baseDirection,from=direction>0?14.05:18.95,to=direction>0?18.95:14.05,start=17+walker.offset,end=23.7,raw=THREE.MathUtils.clamp((cycle-start)/(end-start),0,1),progress=raw*raw*(3-2*raw),moving=raw>0&&raw<1;walker.npc.root.position.set(THREE.MathUtils.lerp(from,to,progress),0,walker.z);walker.npc.root.rotation.y=direction>0?Math.PI/2:-Math.PI/2;walker.npc.update(dt,moving,t*5+i+20)});
+    controls.update();renderer.render(scene,camera)};animate();
   let pointerStart:P=[0,0];const down=(e:PointerEvent)=>{pointerStart=[e.clientX,e.clientY]};const click=(e:PointerEvent)=>{if(e.button!==0||Math.hypot(e.clientX-pointerStart[0],e.clientY-pointerStart[1])>5)return;const rect=renderer.domElement.getBoundingClientRect();const mouse=new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-((e.clientY-rect.top)/rect.height)*2+1);const ray=new THREE.Raycaster();ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects(root.children,true).find(x=>x.object.userData.room);if(hit)window.dispatchEvent(new CustomEvent('campus-room',{detail:hit.object.userData.room}))};renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointerup',click);
-  return ()=>{cancelAnimationFrame(id);ro.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointerup',click);controls.dispose();scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();const material=(o as THREE.Mesh).material;if(material){(Array.isArray(material)?material:[material]).forEach(x=>x.dispose())}});renderer.dispose();renderer.domElement.remove()};
+  return ()=>{cancelAnimationFrame(id);ro.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointerup',click);controls.dispose();[...contextWalkers,...crossingWalkers].forEach(walker=>walker.npc.dispose());scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();const material=(o as THREE.Mesh).material;if(material){(Array.isArray(material)?material:[material]).forEach(x=>x.dispose())}});renderer.dispose();renderer.domElement.remove()};
 }
 
 function MiniPlan({floor,dest,route}:{floor:number;dest:string;route:RouteData}){
@@ -187,6 +235,16 @@ function roomFree(x:number,z:number,obstacles:Obstacle[],width=E104_PLAN.width,d
   const radius=.24;
   return Math.abs(x)<width/2-radius&&Math.abs(z)<depth/2-radius&&!obstacles.some(o=>Math.abs(x-o.x)<o.w/2+radius&&Math.abs(z-o.z)<o.d/2+radius);
 }
+function roomSegmentFree(from:P,to:P,obstacles:Obstacle[],width:number,depth:number){
+  const length=dist(from,to),steps=Math.max(1,Math.ceil(length/.09));
+  for(let i=1;i<=steps;i++){const t=i/steps;if(!roomFree(from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t,obstacles,width,depth))return false}
+  return true;
+}
+function smoothRoomPath(from:P,path:P[],obstacles:Obstacle[],width:number,depth:number){
+  const points=[from,...path],result:P[]=[];let anchor=0;
+  while(anchor<points.length-1){let next=points.length-1;while(next>anchor+1&&!roomSegmentFree(points[anchor],points[next],obstacles,width,depth))next--;result.push(points[next]);anchor=next}
+  return result;
+}
 function roomWalkPath(from:P,to:P,obstacles:Obstacle[],width=E104_PLAN.width,depth=E104_PLAN.depth):P[]{
   const step=.18,w=width,d=depth,nx=Math.ceil(w/step),nz=Math.ceil(d/step);
   const point=(id:number):P=>[-w/2+(id%nx+.5)*step,-d/2+(Math.floor(id/nx)+.5)*step];
@@ -194,7 +252,7 @@ function roomWalkPath(from:P,to:P,obstacles:Obstacle[],width=E104_PLAN.width,dep
   if(!roomFree(...to,obstacles,width,depth))return [];
   const begin=cell(from),end=cell(to),open=new Set([begin]),scores=new globalThis.Map([[begin,0]]),parents=new globalThis.Map<number,number>();
   while(open.size){let cur=-1,best=Infinity;for(const id of open){const p=point(id),v=(scores.get(id)??Infinity)+dist(p,point(end));if(v<best){best=v;cur=id}}
-    if(cur===end){const path:P[]=[to];let at=end;while(at!==begin){path.push(point(at));at=parents.get(at)!}return path.reverse()}
+    if(cur===end){const path:P[]=[to];let at=end;while(at!==begin){path.push(point(at));at=parents.get(at)!}return smoothRoomPath(from,path.reverse(),obstacles,width,depth)}
     open.delete(cur);const x=cur%nx,z=Math.floor(cur/nx);
     for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){if(x+dx<0||x+dx>=nx||z+dz<0||z+dz>=nz)continue;const next=(z+dz)*nx+x+dx,p=point(next);if(!roomFree(...p,obstacles,width,depth))continue;const score=(scores.get(cur)??Infinity)+step;if(score<(scores.get(next)??Infinity)){scores.set(next,score);parents.set(next,cur);open.add(next)}}}
   return [];
@@ -206,6 +264,7 @@ function RoomPreview({room}:{room:Room}){
   const [view,setView]=useState<'perspective'|'top'|'play'>('play');
   const [furnished,setFurnished]=useState(true),[selected,setSelected]=useState<number|null>(null);
   const [notice,setNotice]=useState('Bấm đồ vật để tìm hiểu'),[reset,setReset]=useState(0);
+  const [avatarType,setAvatarType]=useState<'male'|'female'>('male');
   const [help,setHelp]=useState(true);
   const [hall,setHall]=useState(false),[tourFloor,setTourFloor]=useState(room.floor),[arrival,setArrival]=useState(room.id);
   const [items,setItems]=useState<readonly TourItem[]>(ROOM_ITEMS),[near,setNear]=useState<Portal|null>(null);
@@ -231,11 +290,15 @@ function RoomPreview({room}:{room:Room}){
     scene.add(new THREE.HemisphereLight(0xffffff,0x8c9598,2));
     const sun=new THREE.DirectionalLight(0xfff2df,2.6);sun.position.set(-3,8,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:.5,far:22});sun.shadow.bias=-.002;scene.add(sun);
     const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,.6,0);
-    controls.minDistance=2;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=false;
+    controls.minDistance=2;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=true;controls.dampingFactor=.075;
     controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
     controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};controls.update();
     const built=hall?createHallway(scene,floorRooms(tourFloor),tourFloor,arrival):room.id==='E104'?{...createRoom104(scene,furnished,'render'),items:ROOM_ITEMS,width:ROOM104.width,depth:ROOM104.depth,portals:[{id:'exit',label:'Ra hành lang',x:-ROOM104.width/2,z:-ROOM104.depth/2+1.28,kind:'exit' as const}]}:createTeachingRoom(scene,room,furnished);
-    const avatar=createStudent(scene),person=avatar.root;
+    const interactionHints=built.interactables.filter(object=>Number.isInteger(object.userData.station)).map((object,index)=>{
+      const outline=new THREE.BoxHelper(object,0xff7627);const material=outline.material as THREE.LineBasicMaterial;
+      material.transparent=true;material.opacity=.26;material.depthTest=false;outline.renderOrder=24;outline.userData.hintIndex=index;scene.add(outline);return outline;
+    });
+    const avatar=createStudent(scene,avatarType),person=avatar.root;
     setItems(built.items);setNear(null);setConnector(null);
     const dimension=Math.max(built.width,built.depth);
     if(view!=='play'){camera.position.set(view==='top'?0:-dimension*.7,view==='top'?dimension*1.1:dimension*.85,view==='top'?.01:dimension*.9);controls.maxDistance=dimension*3;controls.update()}
@@ -279,7 +342,7 @@ function RoomPreview({room}:{room:Room}){
     const resize=new ResizeObserver(()=>{const r=el.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();dirty=true});resize.observe(el);
     const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(!visible)blur()});observer.observe(el);
     const tick=(time:number)=>{
-      frameId=requestAnimationFrame(tick);if(time-lastRender<30)return;lastRender=time;const dt=Math.min((time-last)/1000,.04);last=time;if(!visible||document.hidden)return;
+      frameId=requestAnimationFrame(tick);if(time-lastRender<16)return;lastRender=time;const dt=Math.min((time-last)/1000,.034);last=time;if(!visible||document.hidden)return;
       if(view!=='play'&&!hall&&!dirty&&time>animateUntil)return;
       let mx=0,mz=0,moving=false;
       if(view==='play'){
@@ -287,21 +350,22 @@ function RoomPreview({room}:{room:Room}){
         const right=new THREE.Vector3(-forward.z,0,forward.x);
         const f=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown')),r=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
         if(f||r){path=[];mx=forward.x*f+right.x*r;mz=forward.z*f+right.z*r}
-        else if(path.length){const next=path[0];mx=next[0]-person.position.x;mz=next[1]-person.position.z;if(Math.hypot(mx,mz)<.07){path.shift();mx=0;mz=0;if(!path.length)setNotice('Đã đến · chạm đồ vật để khám phá')}}
+        else if(path.length){while(path.length&&Math.hypot(path[0][0]-person.position.x,path[0][1]-person.position.z)<.09)path.shift();if(path.length){mx=path[0][0]-person.position.x;mz=path[0][1]-person.position.z}else setNotice('Đã đến · chạm đồ vật để khám phá')}
         const length=Math.hypot(mx,mz),before=person.position.clone();
         if(length>.001){
           const step=Math.min(dt*1.6,length);mx=mx/length*step;mz=mz/length*step;
-          if(roomFree(person.position.x+mx,person.position.z,built.obstacles,built.width,built.depth))person.position.x+=mx;
-          if(roomFree(person.position.x,person.position.z+mz,built.obstacles,built.width,built.depth))person.position.z+=mz;
-          person.rotation.y=Math.atan2(mx,mz);
+          const nextX=person.position.x+mx,nextZ=person.position.z+mz;
+          if(roomFree(nextX,nextZ,built.obstacles,built.width,built.depth)){person.position.x=nextX;person.position.z=nextZ}else{if(roomFree(nextX,person.position.z,built.obstacles,built.width,built.depth))person.position.x=nextX;if(roomFree(person.position.x,nextZ,built.obstacles,built.width,built.depth))person.position.z=nextZ}
+          const desiredRotation=Math.atan2(mx,mz),rotationDelta=Math.atan2(Math.sin(desiredRotation-person.rotation.y),Math.cos(desiredRotation-person.rotation.y));person.rotation.y+=rotationDelta*Math.min(1,dt*11);
         }
         const portal=built.portals.find(p=>Math.hypot(person.position.x-p.x,person.position.z-p.z)<1.35);
         if((portal?.id||'')!==nearId){nearId=portal?.id||'';setNear(portal||null)}
         if(portal?.kind==='exit'&&Math.hypot(person.position.x-portal.x,person.position.z-portal.z)<.37&&(f||r))usePortal(portal);
         moving=before.distanceTo(person.position)>.001;walkTime+=moving?dt*8:0;
         target.copy(person.position).add(new THREE.Vector3(0,.8,0));
-        const delta=target.clone().sub(controls.target);camera.position.add(delta);controls.target.copy(target);controls.update();
+        const follow=1-Math.exp(-10*dt),delta=target.clone().sub(controls.target).multiplyScalar(follow);camera.position.add(delta);controls.target.add(delta);controls.update();
       }
+      interactionHints.forEach((outline,i)=>{outline.visible=view==='play'&&furnished;(outline.material as THREE.LineBasicMaterial).opacity=.18+(Math.sin(time*.004+i*1.3)+1)*.12});
       avatar.update(dt,moving,walkTime);built.update(time,dt,camera,view==='top');renderer.render(scene,camera);dirty=false;
     };
     frameId=requestAnimationFrame(tick);
@@ -315,10 +379,10 @@ function RoomPreview({room}:{room:Room}){
       scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments||o instanceof THREE.Sprite){if(!(o instanceof THREE.Sprite))geometries.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{materials.add(m);const map=(m as THREE.MeshStandardMaterial).map;if(map)textures.add(map)})}});
       geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());avatar.dispose();renderer.dispose();renderer.domElement.remove();
     };
-  },[room.id,view,furnished,reset,hall,tourFloor,arrival]);
+  },[room.id,view,furnished,reset,hall,tourFloor,arrival,avatarType]);
   return <div className="room-preview">
-    <div className="room-preview-tools"><span>{hall?`HÀNH LANG · ${FLOOR_LABELS[tourFloor]}`:room.id+' · KHÁM PHÁ KHÔNG GIAN'}</span><div>{(['perspective','top','play'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}<button onClick={()=>setHelp(true)}>Hướng dẫn chạm</button></div></div>
-    <div className="room-options"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button></div>
+    <div className="room-preview-tools"><span>{hall?`HÀNH LANG · ${FLOOR_LABELS[tourFloor]}`:'KHÁM PHÁ KHÔNG GIAN'}</span><div>{(['perspective','top','play'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}<button onClick={()=>setHelp(true)}>Hướng dẫn chạm</button></div></div>
+    <div className="room-options"><div className="avatar-picker" aria-label="Chọn nhân vật"><span>Nhân vật</span><button className={avatarType==='male'?'active':''} aria-pressed={avatarType==='male'} onClick={()=>setAvatarType('male')}>Nam</button><button className={avatarType==='female'?'active':''} aria-pressed={avatarType==='female'} onClick={()=>setAvatarType('female')}>Nữ</button></div><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button></div>
     <div ref={host} tabIndex={0} role="application" className="room-canvas" aria-label={`Khám phá ${hall?FLOOR_LABELS[tourFloor]:room.id}: chạm sàn để đi, kéo để nhìn quanh, chạm đồ vật để tìm hiểu`}/>
     {view==='play'&&<div className="walk-controls" aria-label="Điều khiển nhân vật">{[['↑','w'],['←','a'],['↓','s'],['→','d']].map(([label,key])=><button key={key} aria-label={'Đi '+label} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);input.current.add(key)}} onPointerUp={()=>input.current.delete(key)} onPointerCancel={()=>input.current.delete(key)} onLostPointerCapture={()=>input.current.delete(key)}>{label}</button>)}<button className="jump-button" onClick={()=>sceneApi.current?.jump()}>Nhảy</button><button className="interact-button" onClick={()=>sceneApi.current?.interact()}>Tương tác</button></div>}
     {selected!==null&&items[selected]&&furnished&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin đồ vật" onClick={()=>setSelected(null)}>×</button><small>{items[selected].name}</small><h3>{items[selected].title}</h3><p>{items[selected].description}</p>{((room.id==='E104'&&[1,3,4,6].includes(selected))||(room.id!=='E104'&&items[selected].action!=='Tìm hiểu'))&&<button className="object-action" onClick={()=>{sceneApi.current?.activate(selected);setNotice(selected===4?'Máy đang pha cà phê minh họa':selected===3?'Đã đổi trạng thái cánh tủ':'Đã đổi trạng thái màn hình')}}>{items[selected].action}</button>}</div>}
@@ -326,8 +390,8 @@ function RoomPreview({room}:{room:Room}){
     {view==='play'&&near&&!connector&&<button className="portal-hint" onClick={()=>sceneApi.current?.interact()}><kbd>Chạm</kbd> {near.label}</button>}
     {connector&&<div className="floor-picker" role="dialog" aria-label="Chọn tầng"><button className="picker-close" onClick={()=>setConnector(null)}>Đóng</button><h3>{connector.label}</h3><p>Đang ở {FLOOR_LABELS[tourFloor]}</p><div>{(connector.kind==='LIFT'?[0,4,5,6]:[tourFloor-1,tourFloor+1].filter(f=>f>=0&&f<=(connector.kind==='CT2'?6:7))).map(f=><button disabled={f===tourFloor} key={f} onClick={()=>changeFloor(f)}>{FLOOR_LABELS[f]}</button>)}</div></div>}
     {transit&&<div className="tour-transition" role="status">{transit}</div>}
-    {help&&<div className="touch-help"><strong>Khám phá bằng cảm ứng</strong><p>① Chạm vào sàn trống để nhân vật đi đến đó.</p><p>② Kéo một ngón để nhìn quanh; dùng hai ngón để thu phóng.</p><p>③ Chạm đồ vật để tìm hiểu. Đến gần cửa rồi chạm nút hiện trên màn hình để sang phòng.</p><button onClick={()=>setHelp(false)}>Đã hiểu · Bắt đầu tham quan</button></div>}
-    <div className="room-preview-caption">{notice}<span>Sinh viên UEH</span></div>
+    {help&&<div className="touch-help"><strong>Khám phá tương tác</strong><p>① Chạm vào sàn trống để nhân vật đi đến đó.</p><p>② Kéo một ngón để nhìn quanh; dùng hai ngón để thu phóng.</p><p>③ Chạm đồ vật để tìm hiểu. Đến gần cửa rồi chạm nút hiện trên màn hình để sang phòng.</p><button onClick={()=>setHelp(false)}>Đã hiểu · Bắt đầu tham quan</button></div>}
+    <div className="room-preview-caption">{notice}<span>{avatarType==='female'?'Sinh viên nữ UEH':'Sinh viên nam UEH'}</span></div>
   </div>
 }
 function RoomRenderGallery({id}:{id:string}){
@@ -355,7 +419,7 @@ function RoomDetail({room,route,onClose}:{room:Room;route:RouteData;onClose:()=>
   const dialog=useRef<HTMLDialogElement>(null);
   const [tab,setTab]=useState<'info'|'photos'>('info');
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>previous?.focus()},[]);
-  return <dialog ref={dialog} className="room-detail-dialog" onCancel={onClose} aria-label="Thông tin phòng"><header><button className="journey-back" onClick={onClose}>← Trở về điều hướng</button><strong>{room.id} · {roomGroups[room.floor].label}</strong><div><button aria-pressed={tab==='info'} onClick={()=>setTab('info')}>Thông tin</button>{['E104','E102','E401'].includes(room.id)&&<button aria-pressed={tab==='photos'} onClick={()=>setTab('photos')}>Ảnh thiết kế</button>}</div></header>{tab==='info'?<div className="detail-layout"><div className="detail-plan"><MiniPlan floor={room.floor} dest={room.id} route={route}/></div><section><small>{commonSpaceName(room.floor)}</small><h2>{room.name}</h2><h3>Chức năng & hoạt động nghiên cứu</h3><p>{ROOM_CATALOGUE[room.id]?.description}</p><h3>Tiếp cận</h3><p>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':'Theo tuyến đường đến cửa phòng tại '+roomGroups[room.floor].label}</p><h3>Nội thất & thiết bị minh họa</h3><p>{room.id==='E104'?'Bàn học đôi · màn hình di động · máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bàn ghế học tập · bảng trắng · bàn giáo viên'}</p><p>Nội thất 3D là bố trí minh họa không gian.</p></section></div>:<RoomRenderGallery key={room.id} id={room.id}/>}</dialog>
+  return <dialog ref={dialog} className="room-detail-dialog" onCancel={onClose} aria-label="Thông tin phòng"><header><button className="journey-back nav-emphasis" onClick={onClose}>← Trở về điều hướng</button><strong>{room.id} · {roomGroups[room.floor].label}</strong><div><button aria-pressed={tab==='info'} onClick={()=>setTab('info')}>Thông tin</button>{['E104','E102','E401'].includes(room.id)&&<button aria-pressed={tab==='photos'} onClick={()=>setTab('photos')}>Ảnh thiết kế</button>}</div></header>{tab==='info'?<div className="detail-layout"><div className="detail-plan"><MiniPlan floor={room.floor} dest={room.id} route={route}/></div><section><small>{commonSpaceName(room.floor)}</small><h2>{room.name}</h2><h3>Chức năng & hoạt động nghiên cứu</h3><p>{ROOM_CATALOGUE[room.id]?.description}</p><h3>Tiếp cận</h3><p>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':'Theo tuyến đường đến cửa phòng tại '+roomGroups[room.floor].label}</p><h3>Nội thất & thiết bị minh họa</h3><p>{room.id==='E104'?'Bàn học đôi · màn hình di động · máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bàn ghế học tập · bảng trắng · bàn giáo viên'}</p><p>Nội thất 3D là bố trí minh họa không gian.</p></section></div>:<RoomRenderGallery key={room.id} id={room.id}/>}</dialog>
 }
 
 export default function CampusEMap(){
@@ -366,10 +430,10 @@ export default function CampusEMap(){
   useEffect(()=>{const f=(e:Event)=>{const id=(e as CustomEvent<string>).detail;if(!ROOMS.some(r=>r.id===id))return;if(tourId)setTourId(id);else {setDestId(id);setOneFloor(null);setShowAll(false)}};window.addEventListener('campus-room',f);return()=>window.removeEventListener('campus-room',f)},[tourId]);
   useEffect(()=>{if(tourId||!host.current)return;return buildScene(host.current,{exploded:true,floor:oneFloor,showAll:showAll||!hasRoute,dest:destId,start,route})},[oneFloor,showAll,destId,start,route,tourId]);
   return <main className="app-shell">
-    <header className="topbar"><img src={`${import.meta.env.BASE_URL}tch-logo-lockup.png`} alt="Technology Convergence Hub" width={152} height={48}/><div><span>Chỉ đường trong tòa nhà</span><b>Cơ sở E · UEH</b></div><div className="status"><i/> Đang hoạt động</div></header>
+    <header className="topbar"><img src={`${import.meta.env.BASE_URL}tch-logo-lockup.png`} alt="Technology Convergence Hub" width={218} height={60}/><div><span>Chỉ đường trong tòa nhà</span><b>Cơ sở E · UEH</b></div><div className="status"><i/> Đang hoạt động</div></header>
     {!tourId&&<>    <section className="workspace">
       <aside className="panel controls-panel"><div className="panel-title"><LocateFixed/> Hành trình của bạn</div><RoomPicker start value={startId} onChange={id=>{setStartId(id);setOneFloor(null);setShowAll(false)}}/><RoomPicker value={destId} onChange={id=>{setDestId(id);setOneFloor(null);setShowAll(false)}}/>
-        <button className="journey-back" onClick={resetJourney}>← Đặt lại</button>{destId&&<div className="room-card" role="button" tabIndex={0} onClick={()=>setDetailId(destId)} onKeyDown={e=>{if(e.key==='Enter')setDetailId(destId)}}><span>{FLOOR_LABELS[dest.floor]}</span><div><small>PHÒNG ĐÃ CHỌN</small><strong>{dest.id}</strong><p>{dest.name}</p></div></div>}
+        <button className="journey-back nav-emphasis reset-journey" onClick={resetJourney}><RotateCcw aria-hidden="true"/><span>Đặt lại hành trình</span></button>{destId&&<div className="room-card" role="button" tabIndex={0} onClick={()=>setDetailId(destId)} onKeyDown={e=>{if(e.key==='Enter')setDetailId(destId)}}><span>{FLOOR_LABELS[dest.floor]}</span><div><small>PHÒNG ĐÃ CHỌN</small><strong>{dest.id}</strong><p className="room-card-name">{dest.name}</p></div></div>}
         <div className="legend"><b>CHÚ THÍCH</b><span><i className="lab"/>Phòng LAB</span><span><i className="class"/>Phòng học</span><span><i className="stair"/>CT1 / CT2</span><span><i className="lift"/>Thang máy</span><span><i className="wc"/>WC Nam / Nữ</span><span><i className="selected"/>Điểm đến</span><span><i className="route"/>Tuyến đường di chuyển</span></div>
       </aside>
       <div className="map-stage"><div className="stage-tools"><button className={showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(true)}}><Building2/>Toàn bộ tòa nhà</button><button className={!showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(false)}}><Route/>Tầng của tuyến</button><span><Rotate3D/> Một ngón: dịch chuyển · Hai ngón: xoay / thu phóng</span></div><div ref={host} className="three-host"/><nav className="floor-rail">{FLOOR_LABELS.map((f,i)=><button key={f} className={oneFloor===i?'active':''} onClick={()=>{setOneFloor(i);setShowAll(false)}}>{f}</button>)}</nav></div>
@@ -377,8 +441,8 @@ export default function CampusEMap(){
       <aside className="panel floor-plan-panel" aria-label="Mặt bằng tầng"><button className="tour-launch" disabled={!destId} onClick={()=>setTourId(destId)}><Rotate3D/><strong>Tham quan 3D</strong><span>{destId?dest.id+' · Khám phá không gian →':'Chọn phòng để bắt đầu'}</span></button>{destId?<><div className="mini-head"><Map/> Mặt bằng · {FLOOR_LABELS[dest.floor]}</div><button className="journey-back" onClick={()=>setDetailId(dest.id)}>Mở mặt bằng & thông tin phòng ↗</button><MiniPlan floor={dest.floor} dest={dest.id} route={route}/></>:<><div className="panel-title"><Map/> Mặt bằng</div><p className="plan-placeholder">Chọn nơi cần đến để xem mặt bằng và thông tin phòng.</p></>}</aside>
     </section>
     </>}
-    {tourId&&<section className="tour-screen"><header><button className="journey-back" onClick={()=>setTourId(null)}>← Trở về điều hướng</button><strong>{tourId} · {ROOMS.find(r=>r.id===tourId)!.name}</strong><span>THAM QUAN 3D</span></header><RoomPreview room={ROOMS.find(r=>r.id===tourId)!}/></section>}
+    {tourId&&<section className="tour-screen"><header><button className="journey-back nav-emphasis tour-back" onClick={()=>setTourId(null)}><ArrowLeft aria-hidden="true"/><span>TRỞ VỀ ĐIỀU HƯỚNG</span></button><strong>{tourId} · {ROOMS.find(r=>r.id===tourId)!.name}</strong><span>THAM QUAN 3D</span></header><RoomPreview room={ROOMS.find(r=>r.id===tourId)!}/></section>}
     {detailId&&<RoomDetail room={ROOMS.find(r=>r.id===detailId)!} route={route} onClose={()=>setDetailId(null)}/>}
-    <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình. <span>PDF SOURCE · CAMPUS E</span></footer>
+    <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình.</footer>
   </main>
 }

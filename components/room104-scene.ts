@@ -110,25 +110,39 @@ export function createRoom104(scene: THREE.Scene, furnished: boolean, openings: 
   return {floor,obstacles,interactables,highlight,activate,update,start:new THREE.Vector3(-w/2+.55,0,-d/2+(doorRanges[0].from+doorRanges[0].to)/2),textures};
 }
 
-export function createStudent(scene:THREE.Scene){
+export type StudentVariant = 'male'|'female'|'casual-male'|'casual-female';
+
+export function createStudent(scene:THREE.Scene,variant:StudentVariant='male',paletteIndex=0){
   const root=new THREE.Group(),model=new THREE.Group();root.add(model);scene.add(root);
   const mat=(color:number)=>new THREE.MeshStandardMaterial({color,roughness:.8});
-  const teal=mat(0x008c8b),orange=mat(0xff813b),skin=mat(0xdca77e),hair=mat(0x242323),pants=mat(0xb4bac2),shoe=mat(0xf4f1e9);
+  const female=variant==='female'||variant==='casual-female',casual=variant.startsWith('casual');
+  const casualShirts=[0x4f75a1,0xc56a4a,0x6c8b63,0x8a6e9f,0xd1a13b,0x3f7f7b],casualBottoms=[0x303943,0x5a4b43,0x384a5b,0x4a3d59];
+  const teal=mat(casual?casualShirts[paletteIndex%casualShirts.length]:0x008c8b),orange=mat(casual?0xe6ded2:0xff813b),skin=mat([0xdca77e,0xc98f68,0xefc09b][paletteIndex%3]),hair=mat([0x242323,0x3b2923,0x17191c][paletteIndex%3]),pants=mat(casual?casualBottoms[paletteIndex%casualBottoms.length]:0xb4bac2),skirt=mat(casual?casualBottoms[(paletteIndex+1)%casualBottoms.length]:0x253746),shoe=mat(paletteIndex%2?0x30363b:0xf4f1e9);
   const ellipsoid=(x:number,y:number,z:number,a:number,b:number,c:number,m:THREE.Material,parent:THREE.Object3D=model)=>{const mesh=new THREE.Mesh(new THREE.SphereGeometry(1,14,10),m);mesh.position.set(x,y,z);mesh.scale.set(a,b,c);parent.add(mesh);mesh.castShadow=true;return mesh};
-  ellipsoid(0,1.12,0,.23,.32,.135,teal);ellipsoid(0,.9,0,.21,.07,.13,teal);
+  ellipsoid(0,1.12,0,female?.215:.23,.32,.135,teal);ellipsoid(0,.9,0,female?.19:.21,.07,.13,teal);
   for(const x of [-.205,.205])ellipsoid(x,1.08,0,.035,.23,.126,orange);
   const neck=new THREE.Mesh(new THREE.CylinderGeometry(.077,.08,.1,12),skin);neck.position.y=1.42;model.add(neck);
   const collar=new THREE.Mesh(new THREE.TorusGeometry(.094,.018,6,20),orange);collar.rotation.x=Math.PI/2;collar.position.y=1.405;model.add(collar);
   ellipsoid(0,1.61,0,.165,.205,.15,skin);ellipsoid(0,1.745,-.015,.174,.10,.151,hair);ellipsoid(-.065,1.7,.10,.10,.07,.065,hair);
+  if(female){
+    ellipsoid(0,1.56,-.105,.18,.26,.105,hair);
+    ellipsoid(-.145,1.53,-.015,.052,.19,.07,hair);ellipsoid(.145,1.53,-.015,.052,.19,.07,hair);
+    ellipsoid(.10,1.36,-.13,.095,.25,.075,hair);
+  }
   for(const x of [-.163,.163])ellipsoid(x,1.60,0,.029,.044,.035,skin);
-  const eyeWhite=mat(0xffffff);for(const x of [-.062,.062]){ellipsoid(x,1.635,.133,.032,.021,.013,eyeWhite);ellipsoid(x,1.634,.145,.012,.015,.006,hair);const glasses=new THREE.Mesh(new THREE.TorusGeometry(.046,.0035,6,16),hair);glasses.position.set(x,1.632,.153);model.add(glasses);}
+  const eyeWhite=mat(0xffffff);for(const x of [-.062,.062]){ellipsoid(x,1.635,.133,.032,.021,.013,eyeWhite);ellipsoid(x,1.634,.145,.012,.015,.006,hair);if(variant==='male'){const glasses=new THREE.Mesh(new THREE.TorusGeometry(.046,.0035,6,16),hair);glasses.position.set(x,1.632,.153);model.add(glasses);}}
   ellipsoid(0,1.596,.148,.021,.029,.021,skin);ellipsoid(0,1.548,.137,.034,.005,.009,hair);
+  if(female){
+    const skirtMesh=new THREE.Mesh(new THREE.CylinderGeometry(.19,.30,.43,18),skirt);skirtMesh.position.y=.78;skirtMesh.scale.z=.78;skirtMesh.castShadow=true;model.add(skirtMesh);
+  }
   const limbs:THREE.Group[]=[];
-  for(const [x,y,isArm] of [[-.265,1.32,1],[.265,1.32,1],[-.105,.88,0],[.105,.88,0]]){const pivot=new THREE.Group();pivot.position.set(x,y,0);model.add(pivot);limbs.push(pivot);
+  for(const [x,y,isArm] of [[-.265,1.32,1],[.265,1.32,1],[-.105,female?.68:.88,0],[.105,female?.68:.88,0]]){const pivot=new THREE.Group();pivot.position.set(x,y,0);model.add(pivot);limbs.push(pivot);
     if(isArm){ellipsoid(0,-.11,0,.095,.15,.093,teal,pivot);ellipsoid(0,-.24,0,.086,.024,.085,orange,pivot);ellipsoid(0,-.37,0,.062,.14,.061,skin,pivot);ellipsoid(0,-.50,0,.066,.07,.06,skin,pivot)}
+    else if(female){ellipsoid(0,-.24,0,.078,.27,.085,skin,pivot);ellipsoid(0,-.52,.035,.105,.07,.16,shoe,pivot)}
     else{ellipsoid(0,-.33,0,.095,.37,.099,pants,pivot);ellipsoid(0,-.76,.035,.108,.075,.16,shoe,pivot)}}
-  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const c=canvas.getContext('2d')!;c.fillStyle='#008c8b';c.fillRect(0,0,256,128);c.fillStyle='white';c.font='bold 72px Arial';c.textAlign='center';c.fillText('UEH',128,77);c.fillStyle='#ff813b';c.font='bold 20px Arial';c.fillText('UNIVERSITY',128,106);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const badge=new THREE.Mesh(new THREE.PlaneGeometry(.14,.07),new THREE.MeshBasicMaterial({map:texture}));badge.position.set(-.09,1.29,.139);model.add(badge);
+  let texture:THREE.CanvasTexture|undefined;
+  if(!casual){const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const c=canvas.getContext('2d')!;c.fillStyle='#008c8b';c.fillRect(0,0,256,128);c.fillStyle='white';c.font='bold 72px Arial';c.textAlign='center';c.fillText('UEH',128,77);c.fillStyle='#ff813b';c.font='bold 20px Arial';c.fillText('UNIVERSITY',128,106);texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const badge=new THREE.Mesh(new THREE.PlaneGeometry(.14,.07),new THREE.MeshBasicMaterial({map:texture}));badge.position.set(-.09,1.29,.139);model.add(badge)}
   const shadow=new THREE.Mesh(new THREE.CircleGeometry(.27,24),new THREE.MeshBasicMaterial({color:0x284144,transparent:true,opacity:.20,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.012;root.add(shadow);
   let velocity=0,height=0;
-  return {root,jump:()=>{if(height===0)velocity=3.9},update:(dt:number,moving:boolean,time:number)=>{velocity-=10.5*dt;height=Math.max(0,height+velocity*dt);if(height===0)velocity=0;model.position.y=height;limbs.forEach((part,i)=>part.rotation.x=height>0?(i<2?-.55:.25):moving?Math.sin(time+(i%2?Math.PI:0))*.5:0);shadow.scale.setScalar(1-height*.2)},dispose:()=>texture.dispose()};
+  return {root,jump:()=>{if(height===0)velocity=3.9},update:(dt:number,moving:boolean,time:number)=>{velocity-=10.5*dt;height=Math.max(0,height+velocity*dt);if(height===0)velocity=0;model.position.y=height;limbs.forEach((part,i)=>part.rotation.x=height>0?(i<2?-.55:.25):moving?Math.sin(time+(i%2?Math.PI:0))*.5:0);shadow.scale.setScalar(1-height*.2)},dispose:()=>texture?.dispose()};
 }

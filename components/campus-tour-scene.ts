@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { commonSpaceName } from './room-catalogue';
-import { createStudent, type RoomObstacle } from './room104-scene';
+import { createStudent, type RoomObstacle, type StudentVariant } from './room104-scene';
 
 export type TourRoom={id:string;name:string;floor:number;box:[number,number,number,number];door:[number,number];doors?:[number,number][]};
 export type TourItem={name:string;x:number;z:number;title:string;description:string;action:string};
@@ -125,11 +125,11 @@ export function createHallway(scene:THREE.Scene,rooms:TourRoom[],floorIndex:numb
   for(let i=0;i<9;i++){const p=world(6.55,3.95-i*.075);box(1.2,.08+i*.08,.19,p.x,.04+i*.04,p.z,white)}
   for(const [x,name] of [[6.25,'WC Nam'],[7.35,'WC Nữ']] as const){addBlock(x-.35,6.02,x+.35,6.65,.6,0xacbdbb);const p=world(x,6.35);sign(name,p.x,1.8,p.z)}
   // NPCs stay inside the shared west circulation strip and out of the stair core.
-  const npcs=Array.from({length:4},(_,i)=>{const npc=createStudent(scene);const p=world(5.72,i<2?2.1+i*.7:5.5);npc.root.position.copy(p);npc.root.scale.setScalar(.94+(i%2)*.04);return npc});
+  const npcVariants:StudentVariant[]=['casual-male','casual-female','male','casual-female'];
+  const npcs=Array.from({length:4},(_,i)=>{const npc=createStudent(scene,npcVariants[i],i+1);const p=world(5.72,i<2?2.1+i*.7:5.5);npc.root.position.copy(p);npc.root.scale.setScalar(.9+(i%2)*.05);return npc});
   const chosen=portals.find(p=>p.id===arrival)||portals[0];
   const start=new THREE.Vector3(chosen?.x??0,0,chosen?.z??0);
   return {floor,obstacles,interactables,items:[] as TourItem[],width,depth,start,portals,highlight:(_i:number)=>{},activate:(_i:number)=>{},
     update:(time:number,dt:number,_camera:THREE.Camera,_top:boolean)=>{npcs.forEach((npc,i)=>{if(i<2){npc.root.position.z=world(5.72,2.1).z+Math.sin(time*.0003+i*Math.PI)*2.0;npc.root.position.x=world(5.72,2.1).x+(i?.25:-.25);npc.root.rotation.y=Math.cos(time*.0003+i*Math.PI)>0?0:Math.PI}else{npc.root.position.x=world(5.72,5.5).x+(i===2?-.4:.4);npc.root.rotation.y=i===2?Math.PI/2:-Math.PI/2}npc.update(dt,i<2,time*.006+i)})}
   };
 }
-
