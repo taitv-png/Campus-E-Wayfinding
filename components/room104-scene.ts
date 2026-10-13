@@ -114,35 +114,69 @@ export type StudentVariant = 'male'|'female'|'casual-male'|'casual-female';
 
 export function createStudent(scene:THREE.Scene,variant:StudentVariant='male',paletteIndex=0){
   const root=new THREE.Group(),model=new THREE.Group();root.add(model);scene.add(root);
-  const mat=(color:number)=>new THREE.MeshStandardMaterial({color,roughness:.8});
-  const female=variant==='female'||variant==='casual-female',casual=variant.startsWith('casual');
+  const mat=(color:number,roughness=.62)=>new THREE.MeshStandardMaterial({color,roughness,metalness:0});
+  const female=variant==='female'||variant==='casual-female',casual=variant.startsWith('casual'),hero=!casual;
   const casualShirts=[0x4f75a1,0xc56a4a,0x6c8b63,0x8a6e9f,0xd1a13b,0x3f7f7b],casualBottoms=[0x303943,0x5a4b43,0x384a5b,0x4a3d59];
-  const teal=mat(casual?casualShirts[paletteIndex%casualShirts.length]:0x008c8b),orange=mat(casual?0xe6ded2:0xff813b),skin=mat([0xdca77e,0xc98f68,0xefc09b][paletteIndex%3]),hair=mat([0x242323,0x3b2923,0x17191c][paletteIndex%3]),pants=mat(casual?casualBottoms[paletteIndex%casualBottoms.length]:0xb4bac2),skirt=mat(casual?casualBottoms[(paletteIndex+1)%casualBottoms.length]:0x253746),shoe=mat(paletteIndex%2?0x30363b:0xf4f1e9);
-  const ellipsoid=(x:number,y:number,z:number,a:number,b:number,c:number,m:THREE.Material,parent:THREE.Object3D=model)=>{const mesh=new THREE.Mesh(new THREE.SphereGeometry(1,14,10),m);mesh.position.set(x,y,z);mesh.scale.set(a,b,c);parent.add(mesh);mesh.castShadow=true;return mesh};
-  ellipsoid(0,1.12,0,female?.215:.23,.32,.135,teal);ellipsoid(0,.9,0,female?.19:.21,.07,.13,teal);
-  for(const x of [-.205,.205])ellipsoid(x,1.08,0,.035,.23,.126,orange);
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.077,.08,.1,12),skin);neck.position.y=1.42;model.add(neck);
-  const collar=new THREE.Mesh(new THREE.TorusGeometry(.094,.018,6,20),orange);collar.rotation.x=Math.PI/2;collar.position.y=1.405;model.add(collar);
-  ellipsoid(0,1.61,0,.165,.205,.15,skin);ellipsoid(0,1.745,-.015,.174,.10,.151,hair);ellipsoid(-.065,1.7,.10,.10,.07,.065,hair);
+  const shirt=mat(casual?casualShirts[paletteIndex%casualShirts.length]:0x0a9a96),trim=mat(casual?0xece5da:0xff7a33),skin=mat([0xf1c4a0,0xd9a07a,0xf5d0b0][paletteIndex%3],.55),hair=mat([0x1f1a18,0x3b2620,0x15171a][paletteIndex%3],.4);
+  const pants=mat(casual?casualBottoms[paletteIndex%casualBottoms.length]:0x2c3a4c),skirt=mat(casual?casualBottoms[(paletteIndex+1)%casualBottoms.length]:0x24364a),shoe=mat(paletteIndex%2?0x2c3237:0xf5f2ea,.5),sole=mat(0xffffff,.7),dark=mat(0x16191c,.3),white=mat(0xffffff,.2),blush=new THREE.MeshStandardMaterial({color:0xff8f8f,transparent:true,opacity:.45,roughness:.9,depthWrite:false});
+  const shapes:THREE.BufferGeometry[]=[];const sphere=new THREE.SphereGeometry(1,22,16);shapes.push(sphere);
+  const add=<T extends THREE.Mesh>(mesh:T,parent:THREE.Object3D=model)=>{mesh.castShadow=true;parent.add(mesh);return mesh};
+  const ball=(x:number,y:number,z:number,a:number,b:number,c:number,m:THREE.Material,parent:THREE.Object3D=model)=>{const mesh=add(new THREE.Mesh(sphere,m),parent);mesh.position.set(x,y,z);mesh.scale.set(a,b,c);return mesh};
+  const capsule=(r:number,len:number,m:THREE.Material,parent:THREE.Object3D,y:number,sx=1,sz=1)=>{const g=new THREE.CapsuleGeometry(r,len,6,14);shapes.push(g);const mesh=add(new THREE.Mesh(g,m),parent);mesh.position.y=y;mesh.scale.set(sx,1,sz);return mesh};
+  // torso: rounded shirt + hem + collar
+  capsule(female?.19:.205,.30,shirt,model,1.13,1,.72);
+  ball(0,.9,0,female?.2:.215,.085,.15,shirt);
+  const hem=new THREE.Mesh(new THREE.TorusGeometry(female?.19:.205,.022,8,28),trim);shapes.push(hem.geometry);hem.rotation.x=Math.PI/2;hem.scale.set(1,.72,1);hem.position.y=.86;add(hem);
+  const collar=new THREE.Mesh(new THREE.TorusGeometry(.085,.022,8,24),trim);shapes.push(collar.geometry);collar.rotation.x=Math.PI/2;collar.position.y=1.39;add(collar);
+  // backpack (UEH students carry one) — straps over the shoulders
+  if(hero||paletteIndex%2===0){const pack=new THREE.Group();pack.position.set(0,1.13,-.17);model.add(pack);
+    const packMat=mat(hero?0xff7a33:0x3b4a55,.7);const body=new THREE.Mesh(new THREE.BoxGeometry(.3,.38,.13),packMat);shapes.push(body.geometry);add(body,pack);
+    ball(0,-.02,-.07,.13,.15,.04,packMat,pack);ball(0,.19,0,.15,.03,.065,packMat,pack);
+    const pocket=new THREE.Mesh(new THREE.BoxGeometry(.2,.13,.04),mat(hero?0xe0662a:0x2f3c45,.7));shapes.push(pocket.geometry);pocket.position.set(0,-.08,-.08);add(pocket,pack);
+    const strapMat=mat(hero?0xd85a20:0x26323a,.7);for(const x of [-.135,.135]){const over=new THREE.Mesh(new THREE.BoxGeometry(.035,.022,.3),strapMat);shapes.push(over.geometry);over.position.set(x,1.405,-.01);add(over);const strap=new THREE.Mesh(new THREE.BoxGeometry(.032,.2,.018),strapMat);shapes.push(strap.geometry);strap.position.set(x,1.3,.135);strap.rotation.x=-.25;add(strap)}}
+  // head
+  const head=new THREE.Group();head.position.y=1.62;model.add(head);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.06,.068,.12,14),skin);shapes.push(neck.geometry);neck.position.y=1.43;add(neck);
+  ball(0,0,0,.19,.205,.18,skin,head);
+  for(const x of [-.185,.185])ball(x,-.01,0,.032,.048,.03,skin,head);
+  // face
+  for(const x of [-.068,.068]){ball(x,.0,.158,.03,.04,.018,dark,head);ball(x+.01,.016,.172,.009,.011,.005,white,head);ball(x,-.052,.15,.036,.018,.008,blush,head);
+    const brow=ball(x,.07,.162,.034,.008,.008,hair,head);brow.rotation.z=x<0?.12:-.12}
+  ball(0,-.03,.178,.018,.016,.016,skin,head);
+  const smile=new THREE.Mesh(new THREE.TorusGeometry(.03,.006,6,16,Math.PI),mat(0x9a4b3e,.6));shapes.push(smile.geometry);smile.rotation.z=Math.PI;smile.position.set(0,-.072,.168);add(smile,head);
+  if(variant==='male'){for(const x of [-.068,.068]){const lens=new THREE.Mesh(new THREE.TorusGeometry(.045,.0055,8,22),dark);shapes.push(lens.geometry);lens.position.set(x,.002,.176);add(lens,head)}const bridge=new THREE.Mesh(new THREE.BoxGeometry(.04,.006,.006),dark);shapes.push(bridge.geometry);bridge.position.set(0,.01,.18);add(bridge,head)}
+  // hair
+  ball(0,.07,-.02,.205,.17,.195,hair,head);
+  ball(0,.02,-.07,.2,.17,.16,hair,head);
   if(female){
-    ellipsoid(0,1.56,-.105,.18,.26,.105,hair);
-    ellipsoid(-.145,1.53,-.015,.052,.19,.07,hair);ellipsoid(.145,1.53,-.015,.052,.19,.07,hair);
-    ellipsoid(.10,1.36,-.13,.095,.25,.075,hair);
+    const fringe=ball(-.05,.11,.11,.15,.07,.09,hair,head);fringe.rotation.z=.25;ball(.09,.1,.12,.1,.06,.07,hair,head);
+    for(const x of [-.17,.17])ball(x,-.1,-.02,.06,.2,.09,hair,head);
+    ball(0,-.13,-.12,.17,.24,.08,hair,head);
+    const tie=new THREE.Mesh(new THREE.TorusGeometry(.03,.012,6,14),trim);shapes.push(tie.geometry);tie.position.set(0,.02,-.2);add(tie,head);
+  }else{
+    const quiff=ball(.04,.15,.09,.15,.07,.1,hair,head);quiff.rotation.z=-.3;ball(-.1,.12,.09,.09,.06,.08,hair,head);
+    for(const x of [-.17,.17])ball(x,.04,-.02,.04,.09,.12,hair,head);
   }
-  for(const x of [-.163,.163])ellipsoid(x,1.60,0,.029,.044,.035,skin);
-  const eyeWhite=mat(0xffffff);for(const x of [-.062,.062]){ellipsoid(x,1.635,.133,.032,.021,.013,eyeWhite);ellipsoid(x,1.634,.145,.012,.015,.006,hair);if(variant==='male'){const glasses=new THREE.Mesh(new THREE.TorusGeometry(.046,.0035,6,16),hair);glasses.position.set(x,1.632,.153);model.add(glasses);}}
-  ellipsoid(0,1.596,.148,.021,.029,.021,skin);ellipsoid(0,1.548,.137,.034,.005,.009,hair);
-  if(female){
-    const skirtMesh=new THREE.Mesh(new THREE.CylinderGeometry(.19,.30,.43,18),skirt);skirtMesh.position.y=.78;skirtMesh.scale.z=.78;skirtMesh.castShadow=true;model.add(skirtMesh);
-  }
+  if(female){const sk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.31,.4,22),skirt);shapes.push(sk.geometry);sk.position.y=.75;sk.scale.z=.78;add(sk)}
+  // limbs (pivots: 0,1 arms · 2,3 legs)
   const limbs:THREE.Group[]=[];
-  for(const [x,y,isArm] of [[-.265,1.32,1],[.265,1.32,1],[-.105,female?.68:.88,0],[.105,female?.68:.88,0]]){const pivot=new THREE.Group();pivot.position.set(x,y,0);model.add(pivot);limbs.push(pivot);
-    if(isArm){ellipsoid(0,-.11,0,.095,.15,.093,teal,pivot);ellipsoid(0,-.24,0,.086,.024,.085,orange,pivot);ellipsoid(0,-.37,0,.062,.14,.061,skin,pivot);ellipsoid(0,-.50,0,.066,.07,.06,skin,pivot)}
-    else if(female){ellipsoid(0,-.24,0,.078,.27,.085,skin,pivot);ellipsoid(0,-.52,.035,.105,.07,.16,shoe,pivot)}
-    else{ellipsoid(0,-.33,0,.095,.37,.099,pants,pivot);ellipsoid(0,-.76,.035,.108,.075,.16,shoe,pivot)}}
+  for(const [x,y,isArm] of [[-.238,1.3,1],[.238,1.3,1],[-.1,female?.66:.86,0],[.1,female?.66:.86,0]]){
+    const pivot=new THREE.Group();pivot.position.set(x,y,0);model.add(pivot);limbs.push(pivot);
+    if(isArm){capsule(.068,.12,shirt,pivot,-.08);const cuff=new THREE.Mesh(new THREE.TorusGeometry(.066,.014,6,18),trim);shapes.push(cuff.geometry);cuff.rotation.x=Math.PI/2;cuff.position.y=-.2;add(cuff,pivot);capsule(.05,.16,skin,pivot,-.32);ball(0,-.47,.005,.058,.062,.05,skin,pivot);pivot.rotation.z=x<0?-.08:.08}
+    else{const legLen=female?.36:.56;capsule(female?.058:.078,legLen,female?skin:pants,pivot,-legLen/2-.04);const footY=-(legLen+.13);ball(0,footY,.04,.09,.06,.15,shoe,pivot);ball(0,footY-.04,.04,.093,.018,.155,sole,pivot)}
+  }
   let texture:THREE.CanvasTexture|undefined;
-  if(!casual){const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const c=canvas.getContext('2d')!;c.fillStyle='#008c8b';c.fillRect(0,0,256,128);c.fillStyle='white';c.font='bold 72px Arial';c.textAlign='center';c.fillText('UEH',128,77);c.fillStyle='#ff813b';c.font='bold 20px Arial';c.fillText('UNIVERSITY',128,106);texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const badge=new THREE.Mesh(new THREE.PlaneGeometry(.14,.07),new THREE.MeshBasicMaterial({map:texture}));badge.position.set(-.09,1.29,.139);model.add(badge)}
-  const shadow=new THREE.Mesh(new THREE.CircleGeometry(.27,24),new THREE.MeshBasicMaterial({color:0x284144,transparent:true,opacity:.20,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.012;root.add(shadow);
-  let velocity=0,height=0;
-  return {root,jump:()=>{if(height===0)velocity=3.9},update:(dt:number,moving:boolean,time:number)=>{velocity-=10.5*dt;height=Math.max(0,height+velocity*dt);if(height===0)velocity=0;model.position.y=height;limbs.forEach((part,i)=>part.rotation.x=height>0?(i<2?-.55:.25):moving?Math.sin(time+(i%2?Math.PI:0))*.5:0);shadow.scale.setScalar(1-height*.2)},dispose:()=>texture?.dispose()};
+  if(hero){const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const c=canvas.getContext('2d')!;c.fillStyle='#0a9a96';c.fillRect(0,0,256,128);c.fillStyle='white';c.font='bold 72px Arial';c.textAlign='center';c.fillText('UEH',128,77);c.fillStyle='#ffd2b8';c.font='bold 20px Arial';c.fillText('UNIVERSITY',128,106);texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const badge=new THREE.Mesh(new THREE.PlaneGeometry(.13,.065),new THREE.MeshBasicMaterial({map:texture}));shapes.push(badge.geometry);badge.position.set(0,1.18,.152);model.add(badge)}
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(.3,28),new THREE.MeshBasicMaterial({color:0x1d3134,transparent:true,opacity:.24,depthWrite:false}));shapes.push(shadow.geometry);shadow.rotation.x=-Math.PI/2;shadow.position.y=.012;root.add(shadow);
+  let velocity=0,height=0,clock=paletteIndex*1.7,swing=0;
+  return {root,jump:()=>{if(height===0)velocity=3.9},update:(dt:number,moving:boolean,time:number)=>{
+    clock+=dt;velocity-=10.5*dt;height=Math.max(0,height+velocity*dt);if(height===0)velocity=0;
+    swing=THREE.MathUtils.damp(swing,moving?1:0,10,dt);
+    const phase=time,bob=moving?Math.abs(Math.sin(phase))*.035:Math.sin(clock*2.2)*.008;
+    model.position.y=height+bob;
+    model.rotation.z=Math.sin(phase)*.03*swing;
+    head.rotation.y=(1-swing)*Math.sin(clock*.7)*.18;head.rotation.x=Math.sin(clock*1.1)*.03;
+    limbs.forEach((part,i)=>{const s=Math.sin(phase+(i%2?Math.PI:0))*(i<2?-.6:.55);part.rotation.x=height>0?(i<2?-.9:.3):s*swing});
+    shadow.scale.setScalar(1-height*.2)},
+    dispose:()=>{texture?.dispose();shapes.forEach(g=>g.dispose())}};
 }

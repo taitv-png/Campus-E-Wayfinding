@@ -5,6 +5,8 @@ import CampusEMap from '../components/CampusEMap';
 import '../app/globals.css';
 import '../app/kiosk.css';
 import '../app/theme.css';
+import '../app/intro.css';
+import '../app/polish.css';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><CampusEMap /></React.StrictMode>,
