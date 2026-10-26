@@ -1,7 +1,6 @@
 # Hiện trạng E402–E403 và E602–E603
 
-Cập nhật 26/10/2026 cho web độc lập `TCH-Wayfinding-Prototype`.
-Chưa áp dụng sang `Tech-Convergence-Hub`.
+Cập nhật và xuất bản ngày 26/10/2026 trên web độc lập `TCH-Wayfinding-Prototype` và web TCH chính `Tech-Convergence-Hub`. E602-E603 dùng tên đã được người dùng xác nhận: `Cyber Security Lab`.
 
 ## Nguồn và phạm vi
 
@@ -20,7 +19,7 @@ Chưa áp dụng sang `Tech-Convergence-Hub`.
 | Hai cửa trên tường kính | Đầu và cuối dãy kính | 5033, 5035, 5037 |
 | Cửa thứ ba | Tường đông nhìn ra phía cầu thang | 5034, 5036 |
 | Ba ô cửa sổ đôi | Hai ô giữa hai cửa bắc, một ô sau cửa bắc cuối phòng | 5037 |
-| Máy tính | Màn hình đen, lưng và chân bạc; hướng về tây | 5032, 5036, 5039 |
+| Máy tính | Màn hình đen, lưng và chân bạc; mặt hiển thị quay về phía ghế sử dụng, bàn phím nằm giữa ghế và màn hình | 5032, 5036, 5039 |
 | Bàn và ghế | Gỗ sồi sáng, yếm gỗ, vách ngăn thấp đen; ghế kem/cam/xanh lá, chân thép | 5027–5033 |
 | Hai cột | Trong hai lối đi giữa ba cụm bàn | 5035, 5036, 5039 |
 | Trần và tường | LED vuông, máy chiếu, máy lạnh, quạt và camera | 5033, 5036, 5039 |
