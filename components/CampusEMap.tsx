@@ -3,11 +3,15 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ROOM_CATALOGUE, commonSpaceName } from './room-catalogue';
-import { createRoom104, createStudent, ROOM_ITEMS, ROOM104 } from './room104-scene';
-import { createTeachingRoom, createHallway, type TourItem, type Portal } from './campus-tour-scene';
+import { createStudent, ROOM_ITEMS } from './room104-scene';
+import { createHallway, type TourItem, type Portal } from './campus-tour-scene';
+import { isInstalledComputerLab } from './computer-lab-scene';
+import { ROOM_SURVEYS, hasRoomSurvey } from './room-surveys';
+import { createRoomTour } from './room-tour';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ArrowLeft, Building2, ChevronRight, Footprints, Info, LocateFixed, Map, Maximize2, Navigation, RotateCcw, Route, Rotate3D } from 'lucide-react';
 import IntroScreen from './IntroScreen';
+import { RoomName } from './RoomName';
 
 type P = [number, number];
 type Room = { id:string; name:string; floor:number; box:[number,number,number,number]; door:P; doors?:P[]; outline?:P[]; kind:'lab'|'class'|'support' };
@@ -32,7 +36,7 @@ function floorRooms(floor:number):Room[] {
   const doors3:P[]=[[4.2,2.62],[6.45,1.42],[8.18,4.6]];
   const doors7:P[]=[[5.38,4.6],[8.18,4.6]];
   const doors=sets[floor].length===4?doors4:floor===7?doors7:doors3;
-  return sets[floor].map((id,i)=>({id,name:names[id],floor,box:boxes[i] as Room['box'],door:doors[i],doors:floor<7&&(id.endsWith('02')||id.includes('+'))?[doors[i],[5.38,4.6]]:[doors[i]],kind: floor===5||id.endsWith('03')?'class':'lab'}));
+  return sets[floor].map((id,i)=>({id,name:names[id],floor,box:boxes[i] as Room['box'],door:doors[i],doors:isInstalledComputerLab(id)?[doors[i],[1.3,2.62],[5.38,4.6]]:floor<7&&(id.endsWith('02')||id.includes('+'))?[doors[i],[5.38,4.6]]:[doors[i]],kind:id==='E502'||id==='E503'?'lab':floor===5||id.endsWith('03')?'class':'lab'}));
 }
 const ROOMS = FLOOR_LABELS.flatMap((_,i)=>floorRooms(i));
 const PLACES:Place[] = [
@@ -295,7 +299,7 @@ function RoomPreview({room}:{room:Room}){
     controls.minDistance=2;controls.maxDistance=22;controls.maxPolarAngle=Math.PI*.48;controls.enableDamping=true;controls.dampingFactor=.075;
     controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
     controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};controls.update();
-    const built=hall?createHallway(scene,floorRooms(tourFloor),tourFloor,arrival):room.id==='E104'?{...createRoom104(scene,furnished,'render'),items:ROOM_ITEMS,width:ROOM104.width,depth:ROOM104.depth,portals:[{id:'exit',label:'Ra hành lang',x:-ROOM104.width/2,z:-ROOM104.depth/2+1.28,kind:'exit' as const}]}:createTeachingRoom(scene,room,furnished);
+    const built=hall?createHallway(scene,floorRooms(tourFloor),tourFloor,arrival):createRoomTour(scene,room,furnished);
     const interactionHints=built.interactables.filter(object=>Number.isInteger(object.userData.station)).map((object,index)=>{
       const outline=new THREE.BoxHelper(object,0xff7627);const material=outline.material as THREE.LineBasicMaterial;
       material.transparent=true;material.opacity=.26;material.depthTest=false;outline.renderOrder=24;outline.userData.hintIndex=index;scene.add(outline);return outline;
@@ -303,12 +307,12 @@ function RoomPreview({room}:{room:Room}){
     const avatar=createStudent(scene,avatarType),person=avatar.root;
     setItems(built.items);setNear(null);setConnector(null);
     const dimension=Math.max(built.width,built.depth);
-    if(view!=='play'){camera.position.set(view==='top'?0:-dimension*.7,view==='top'?dimension*1.1:dimension*.85,view==='top'?.01:dimension*.9);controls.maxDistance=dimension*3;controls.update()}
+    if(view!=='play'){camera.position.set(view==='top'?0:-dimension*.7,view==='top'?dimension*(isInstalledComputerLab(room.id)&&!hall?1.5:1.1):dimension*.85,view==='top'?.01:dimension*.9);controls.maxDistance=dimension*3;controls.update()}
     let changing=false,nearId='';
     const usePortal=(portal:Portal)=>{if(changing)return;if(portal.kind==='exit'){changing=true;setArrival(room.id);setTourFloor(room.floor);setHall(true)}else if(portal.kind==='room'){changing=true;setHall(false);window.dispatchEvent(new CustomEvent('campus-room',{detail:portal.id}))}else {keys.clear();el.blur();setConnector(portal)}};
 
     person.position.copy(built.start);person.rotation.y=Math.PI/2;
-    let dirty=true,animateUntil=0;
+    let dirty=true,sceneSettling=true,animateUntil=0;
     const invalidate=()=>{dirty=true};controls.addEventListener('change',invalidate);
     sceneApi.current={highlight:i=>{built.highlight(i);dirty=true},activate:i=>{built.activate(i);animateUntil=performance.now()+5000;dirty=true},jump:()=>{avatar.jump();animateUntil=performance.now()+1000;dirty=true},interact:()=>interact()};
     let path:P[]=[],frameId=0,last=0,visible=true,walkTime=0,lastRender=0;
@@ -341,11 +345,12 @@ function RoomPreview({room}:{room:Room}){
     const cancelPointer=(e:PointerEvent)=>{activePointers.delete(e.pointerId);dragged=true};
     renderer.domElement.addEventListener('pointercancel',cancelPointer);
     renderer.domElement.addEventListener('pointerdown',remember);renderer.domElement.addEventListener('pointermove',track);renderer.domElement.addEventListener('pointerup',pick);
-    const resize=new ResizeObserver(()=>{const r=el.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();dirty=true});resize.observe(el);
+    const resize=new ResizeObserver(()=>{const r=el.getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(view==='top'){const fit=Math.max(built.depth,built.width/camera.aspect)/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));camera.position.set(0,.6+fit*1.16,.01);controls.target.set(0,.6,0);controls.update()}dirty=true});resize.observe(el);
     const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(!visible)blur()});observer.observe(el);
     const tick=(time:number)=>{
       frameId=requestAnimationFrame(tick);if(time-lastRender<16)return;lastRender=time;const dt=Math.min((time-last)/1000,.034);last=time;if(!visible||document.hidden)return;
-      if(view!=='play'&&!hall&&!dirty&&time>animateUntil)return;
+      controls.update();
+      if(view!=='play'&&!hall&&!dirty&&!sceneSettling&&time>animateUntil)return;
       let mx=0,mz=0,moving=false;
       if(view==='play'){
         const forward=new THREE.Vector3();camera.getWorldDirection(forward);forward.y=0;forward.normalize();
@@ -368,7 +373,7 @@ function RoomPreview({room}:{room:Room}){
         const follow=1-Math.exp(-10*dt),delta=target.clone().sub(controls.target).multiplyScalar(follow);camera.position.add(delta);controls.target.add(delta);controls.update();
       }
       interactionHints.forEach((outline,i)=>{outline.visible=view==='play'&&furnished;(outline.material as THREE.LineBasicMaterial).opacity=.18+(Math.sin(time*.004+i*1.3)+1)*.12});
-      avatar.update(dt,moving,walkTime);built.update(time,dt,camera,view==='top');renderer.render(scene,camera);dirty=false;
+      avatar.update(dt,moving,walkTime);sceneSettling=Boolean(built.update(time,dt,camera,view==='top'));renderer.render(scene,camera);dirty=false;
     };
     frameId=requestAnimationFrame(tick);
     setNotice(view==='play'?'Chạm sàn trống để đi · Kéo để nhìn quanh · Chạm đồ vật để tìm hiểu':'Kéo một ngón để xoay · Dùng hai ngón để thu phóng và dịch chuyển');
@@ -386,7 +391,7 @@ function RoomPreview({room}:{room:Room}){
     <div className="tour-toolbar"><div className="tool-group view-switch" role="group" aria-label="Chế độ xem">{(['play','perspective','top'] as const).map(v=><button key={v} className={view===v?'active':''} aria-pressed={view===v} onClick={()=>setView(v)}>{v==='perspective'?'Góc 3D':v==='top'?'Mặt bằng':'Tham quan'}</button>)}</div>{hall&&<span className="tour-location">Hành lang · {FLOOR_LABELS[tourFloor]}</span>}<div className="tool-group avatar-picker" role="group" aria-label="Chọn nhân vật"><span>Nhân vật</span><button className={avatarType==='male'?'active':''} aria-pressed={avatarType==='male'} onClick={()=>setAvatarType('male')}>Nam</button><button className={avatarType==='female'?'active':''} aria-pressed={avatarType==='female'} onClick={()=>setAvatarType('female')}>Nữ</button></div><div className="tool-actions"><button onClick={()=>setFurnished(v=>!v)}>{furnished?'Ẩn nội thất':'Hiện nội thất'}</button><button onClick={()=>setReset(v=>v+1)}>Về cửa vào</button><button className="help-button" onClick={()=>setHelp(true)} aria-label="Hướng dẫn"><Info aria-hidden="true"/>Hướng dẫn</button></div></div>
     <div ref={host} tabIndex={0} role="application" className="room-canvas" aria-label={`Khám phá ${hall?FLOOR_LABELS[tourFloor]:room.id}: chạm sàn để đi, kéo để nhìn quanh, chạm đồ vật để tìm hiểu`}/>
     {view==='play'&&<div className="walk-controls" aria-label="Điều khiển nhân vật">{[['↑','w'],['←','a'],['↓','s'],['→','d']].map(([label,key])=><button key={key} aria-label={'Đi '+label} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);input.current.add(key)}} onPointerUp={()=>input.current.delete(key)} onPointerCancel={()=>input.current.delete(key)} onLostPointerCapture={()=>input.current.delete(key)}>{label}</button>)}<button className="jump-button" onClick={()=>sceneApi.current?.jump()}>Nhảy</button><button className="interact-button" onClick={()=>sceneApi.current?.interact()}>Tương tác</button></div>}
-    {selected!==null&&items[selected]&&furnished&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin đồ vật" onClick={()=>setSelected(null)}>×</button><small>{items[selected].name}</small><h3>{items[selected].title}</h3><p>{items[selected].description}</p>{((room.id==='E104'&&[1,3,4,6].includes(selected))||(room.id!=='E104'&&items[selected].action!=='Tìm hiểu'))&&<button className="object-action" onClick={()=>{sceneApi.current?.activate(selected);setNotice(selected===4?'Máy đang pha cà phê minh họa':selected===3?'Đã đổi trạng thái cánh tủ':'Đã đổi trạng thái màn hình')}}>{items[selected].action}</button>}</div>}
+    {selected!==null&&items[selected]&&furnished&&<div className="station-detail" role="status"><button aria-label="Đóng thông tin đồ vật" onClick={()=>setSelected(null)}>×</button><small>{items[selected].name}</small><h3>{items[selected].title}</h3><p>{items[selected].description}</p>{((room.id==='E104'&&[1,3,4,6].includes(selected))||(room.id!=='E104'&&items[selected].action!=='Tìm hiểu'))&&<button className="object-action" onClick={()=>{sceneApi.current?.activate(selected);setNotice(hasRoomSurvey(room.id)?'Đã đổi trạng thái trình diễn của thiết bị':selected===4?'Máy đang pha cà phê minh họa':selected===3?'Đã đổi trạng thái cánh tủ':'Đã đổi trạng thái màn hình')}}>{items[selected].action}</button>}</div>}
     <div className="room-item-list" aria-label="Đồ vật trong phòng">{items.map((item,i)=><button disabled={!furnished} key={item.name} aria-pressed={selected===i} className={selected===i?'active':''} onClick={()=>setSelected(i)}>{item.name}</button>)}</div>
     {view==='play'&&near&&!connector&&<button className="portal-hint" onClick={()=>sceneApi.current?.interact()}><kbd>Chạm</kbd> {near.label}</button>}
     {connector&&<div className="floor-picker" role="dialog" aria-label="Chọn tầng"><button className="picker-close" onClick={()=>setConnector(null)}>Đóng</button><h3>{connector.label}</h3><p>Đang ở {FLOOR_LABELS[tourFloor]}</p><div>{(connector.kind==='LIFT'?[0,4,5,6]:[tourFloor-1,tourFloor+1].filter(f=>f>=0&&f<=(connector.kind==='CT2'?6:7))).map(f=><button disabled={f===tourFloor} key={f} onClick={()=>changeFloor(f)}>{FLOOR_LABELS[f]}</button>)}</div></div>}
@@ -396,12 +401,14 @@ function RoomPreview({room}:{room:Room}){
   </div>
 }
 function RoomRenderGallery({id}:{id:string}){
-  const photos=id==='E102'?[{file:'102',label:'Toàn cảnh phòng'},{file:'106',label:'Khu trình chiếu'},{file:'109',label:'Khu hậu kỳ'}]:id==='E401'?[{file:'144',label:'Toàn cảnh phòng'},{file:'148',label:'Xe đạp tương tác'},{file:'153_1',label:'Khu máy tính'}]:[{file:'134',label:'Toàn cảnh phòng'},{file:'137',label:'Khu bàn học'},{file:'139',label:'Khu làm việc'}];
+  const survey=ROOM_SURVEYS[id],installed=!!survey;
+  const photos=survey?.photos??(id==='E102'?[{file:'102',label:'Toàn cảnh phòng'},{file:'106',label:'Khu trình chiếu'},{file:'109',label:'Khu hậu kỳ'}]:id==='E401'?[{file:'144',label:'Toàn cảnh phòng'},{file:'148',label:'Xe đạp tương tác'},{file:'153_1',label:'Khu máy tính'}]:[{file:'134',label:'Toàn cảnh phòng'},{file:'137',label:'Khu bàn học'},{file:'139',label:'Khu làm việc'}]);
   const [active,setActive]=useState(0);
   const photo=photos[active];
-  return <div className="room-render-gallery" aria-label={"Ảnh thiết kế phòng "+id}>
-    <figure><img src={`${import.meta.env.BASE_URL}rooms/${id.toLowerCase()}/${photo.file}.jpg`} alt={photo.label+' — phòng '+id} width={960} height={540} loading="lazy"/><figcaption>{photo.label}<span>{active+1} / {photos.length}</span></figcaption></figure>
-    <div className="render-thumbnails">{photos.map((item,i)=><button key={item.file} aria-label={'Xem '+item.label.toLowerCase()} aria-pressed={active===i} onClick={()=>setActive(i)}><img src={`${import.meta.env.BASE_URL}rooms/${id.toLowerCase()}/${item.file}.jpg`} alt="" width={960} height={540} loading="lazy"/><span>{item.label}</span></button>)}</div>
+  const photoPath=`${import.meta.env.BASE_URL}rooms/${survey?.folder??id.toLowerCase()}/`;
+  return <div className="room-render-gallery" aria-label={survey?.sourceLabel??('Ảnh thiết kế phòng '+id)}>
+    <figure><img src={`${photoPath}${photo.file}.jpg`} alt={photo.label+' — '+(survey?.sourceLabel??('phòng '+id))} width={1600} height={900} loading="lazy"/><figcaption>{photo.label}<span>{active+1} / {photos.length}</span></figcaption></figure>
+    <div className="render-thumbnails" style={installed?{overflowY:'auto'}:undefined}>{photos.map((item,i)=><button key={item.file} style={installed?{flexShrink:0}:undefined} aria-label={'Xem '+item.label.toLowerCase()} aria-pressed={active===i} onClick={()=>setActive(i)}><img src={`${photoPath}${item.file}.jpg`} alt="" width={960} height={540} loading="lazy"/><span>{item.label}</span></button>)}</div>
   </div>
 }
 
@@ -414,15 +421,23 @@ function RoomPicker({value,onChange,start=false}:{value:string;onChange:(id:stri
   const choose=(id:string)=>{onChange(id);close()};
   const label=chosen?displayId(chosen.id):value==='ENTRY'?'Cổng Nguyễn Văn Thủ':start?'Chọn vị trí bắt đầu':'Chọn phòng cần đến';
   const sub=chosen?roomGroups[chosen.floor].label+' · '+chosen.name:value==='ENTRY'?'Tầng trệt · Lối vào chính':start?'Bạn đang đứng ở đâu?':'Chọn tầng, rồi chọn phòng';
-  return <div className={'room-selector'+(start?' is-start':' is-dest')+(chosen||value==='ENTRY'?' is-set':'')}><span className="selector-label"><i aria-hidden="true">{start?'A':'B'}</i>{start?'Vị trí hiện tại':'Phòng cần đến'}</span><button ref={trigger} className="select-room" aria-haspopup="dialog" onClick={()=>{setFloor(chosen?.floor??0);setOpen(true)}}><span><b>{label}</b><small>{sub}</small></span><ChevronRight aria-hidden="true"/></button>
-    {open&&<dialog ref={dialog} className="room-picker-dialog" onCancel={close}><header><div><small>CHỌN TẦNG → CHỌN PHÒNG</small><h2>{start?'Bạn đang ở đâu?':'Bạn muốn đến phòng nào?'}</h2></div><button onClick={close}>Đóng ×</button></header><nav aria-label="Chọn tầng">{roomGroups.map(g=><button key={g.floor} aria-pressed={floor===g.floor} onClick={()=>setFloor(g.floor)}>{g.label}</button>)}</nav><h3>{roomGroups[floor].label}</h3><div className="picker-rooms">{start&&floor===0&&<button aria-pressed={value==='ENTRY'} onClick={()=>choose('ENTRY')}><b>Lối vào</b><span>Cổng Nguyễn Văn Thủ</span></button>}{roomGroups[floor].rooms.map(r=><button key={r.id} aria-pressed={(start?'ROOM-'+r.id:r.id)===value} onClick={()=>choose(start?'ROOM-'+r.id:r.id)}><b>{displayId(r.id)}</b><span>{r.name}</span></button>)}</div></dialog>}
+  return <div className={'room-selector'+(start?' is-start':' is-dest')+(chosen||value==='ENTRY'?' is-set':'')}><span className="selector-label"><i aria-hidden="true">{start?'A':'B'}</i>{start?'Vị trí hiện tại':'Phòng cần đến'}</span><button ref={trigger} className="select-room" aria-haspopup="dialog" onClick={()=>{setFloor(chosen?.floor??0);setOpen(true)}}><span><b>{label}</b><small title={sub}>{chosen?<>{roomGroups[chosen.floor].label}<RoomName name={chosen.name}/></>:sub}</small></span><ChevronRight aria-hidden="true"/></button>
+    {open&&<dialog ref={dialog} className="room-picker-dialog" onCancel={close}><header><div><small>CHỌN TẦNG → CHỌN PHÒNG</small><h2>{start?'Bạn đang ở đâu?':'Bạn muốn đến phòng nào?'}</h2></div><button onClick={close}>Đóng ×</button></header><nav aria-label="Chọn tầng">{roomGroups.map(g=><button key={g.floor} aria-pressed={floor===g.floor} onClick={()=>setFloor(g.floor)}>{g.label}</button>)}</nav><h3>{roomGroups[floor].label}</h3><div className="picker-rooms">{start&&floor===0&&<button aria-pressed={value==='ENTRY'} onClick={()=>choose('ENTRY')}><b>Lối vào</b><span>Cổng Nguyễn Văn Thủ</span></button>}{roomGroups[floor].rooms.map(r=><button key={r.id} aria-pressed={(start?'ROOM-'+r.id:r.id)===value} onClick={()=>choose(start?'ROOM-'+r.id:r.id)}><b>{displayId(r.id)}</b><span><RoomName name={r.name}/></span></button>)}</div></dialog>}
   </div>
 }
 function RoomDetail({room,route,onClose}:{room:Room;route:RouteData;onClose:()=>void}){
   const dialog=useRef<HTMLDialogElement>(null);
+  const survey=ROOM_SURVEYS[room.id],installed=!!survey;
   const [tab,setTab]=useState<'info'|'photos'>('info');
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>previous?.focus()},[]);
-  return <dialog ref={dialog} className="room-detail-dialog" onCancel={onClose} aria-label="Thông tin phòng"><header><button className="journey-back nav-emphasis" onClick={onClose}>← Trở về điều hướng</button><strong>{room.id} · {roomGroups[room.floor].label}</strong><div><button aria-pressed={tab==='info'} onClick={()=>setTab('info')}>Thông tin</button>{['E104','E102','E401'].includes(room.id)&&<button aria-pressed={tab==='photos'} onClick={()=>setTab('photos')}>Ảnh thiết kế</button>}</div></header>{tab==='info'?<div className="detail-layout"><div className="detail-plan"><MiniPlan floor={room.floor} dest={room.id} route={route}/></div><section><small>{commonSpaceName(room.floor)}</small><h2>{room.name}</h2><h3>Chức năng & hoạt động nghiên cứu</h3><p>{ROOM_CATALOGUE[room.id]?.description}</p><h3>Tiếp cận</h3><p>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':'Theo tuyến đường đến cửa phòng tại '+roomGroups[room.floor].label}</p><h3>Nội thất & thiết bị minh họa</h3><p>{room.id==='E104'?'Bàn học đôi · màn hình di động · máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bàn ghế học tập · bảng trắng · bàn giáo viên'}</p><p>Nội thất 3D là bố trí minh họa không gian.</p></section></div>:<RoomRenderGallery key={room.id} id={room.id}/>}</dialog>
+  return <dialog ref={dialog} className="room-detail-dialog" onCancel={onClose} aria-label="Thông tin phòng">
+    <header><button className="journey-back nav-emphasis" onClick={onClose}>← Trở về điều hướng</button><strong>{room.id} · {roomGroups[room.floor].label}</strong><div><button aria-pressed={tab==='info'} onClick={()=>setTab('info')}>Thông tin</button>{(installed||['E104','E102','E401'].includes(room.id))&&<button aria-pressed={tab==='photos'} onClick={()=>setTab('photos')}>{installed?'Ảnh hiện trạng':'Ảnh thiết kế'}</button>}</div></header>
+    {tab==='info'?<div className="detail-layout"><div className="detail-plan"><MiniPlan floor={room.floor} dest={room.id} route={route}/></div><section>
+      <small>{commonSpaceName(room.floor)}</small><h2><RoomName name={room.name}/></h2><h3>Chức năng & hoạt động nghiên cứu</h3><p>{ROOM_CATALOGUE[room.id]?.description}</p>
+      <h3>Tiếp cận</h3><p>{room.floor===7?'Tầng 7 chỉ có cầu thang bộ CT1':isInstalledComputerLab(room.id)?'Ba cửa tiếp cận: hai cửa trên dãy tường kính và một cửa phía cầu thang.':'Theo tuyến đường đến cửa phòng tại '+roomGroups[room.floor].label}</p>
+      <h3>{installed?'Nội thất hiện hữu theo ảnh':'Nội thất & thiết bị minh họa'}</h3><p>{survey?.summary??(room.id==='E104'?'Bàn học đôi · màn hình di động · máy tính · kệ trưng bày · tủ hồ sơ · quầy cà phê':room.id==='E102'?'Bàn học · màn hình di động · vách lưới · kệ học liệu':room.id==='E401'?'Bàn học · máy tính · xe đạp · bàn mô hình':'Bàn ghế học tập · bảng trắng · bàn giáo viên')}</p>
+      <p>{survey?`Tái dựng từ ${survey.photos.length} ảnh hiện trạng do bạn cung cấp; kích thước và một số chi tiết được ước lượng từ ảnh.`:'Nội thất 3D là bố trí minh họa không gian.'}</p>{survey?.note&&<p>{survey.note}</p>
+    }</section></div>:<RoomRenderGallery key={room.id} id={room.id}/>}</dialog>
 }
 
 export default function CampusEMap(){
@@ -440,7 +455,7 @@ export default function CampusEMap(){
       <aside className="panel controls-panel"><div className="panel-head"><div className="panel-title"><LocateFixed/> Hành trình của bạn</div>{(startId||destId)&&<button className="reset-journey" onClick={resetJourney}><RotateCcw aria-hidden="true"/><span>Đặt lại</span></button>}</div>
         <div className="journey"><RoomPicker start value={startId} onChange={id=>{setStartId(id);setOneFloor(null);setShowAll(false)}}/><RoomPicker value={destId} onChange={id=>{setDestId(id);setOneFloor(null);setShowAll(false)}}/></div>
         {!hasRoute&&<p className="journey-hint">{!startId&&!destId?'Bắt đầu bằng cách chọn nơi bạn đang đứng (A), sau đó chọn phòng muốn đến (B).':!startId?'Chọn thêm vị trí hiện tại (A) để xem tuyến đường.':'Chọn phòng cần đến (B) để xem tuyến đường.'}</p>}
-        {destId&&<div className="room-card" role="button" tabIndex={0} onClick={()=>setDetailId(destId)} onKeyDown={e=>{if(e.key==='Enter')setDetailId(destId)}}><div className="room-card-top"><small>Phòng đã chọn</small><span className="floor-chip">{roomGroups[dest.floor].label}</span></div><strong>{displayId(dest.id)}</strong><p className="room-card-name">{dest.name}</p><span className="room-card-link">Xem thông tin phòng <ChevronRight aria-hidden="true"/></span></div>}
+        {destId&&<div className="room-card" role="button" tabIndex={0} onClick={()=>setDetailId(destId)} onKeyDown={e=>{if(e.key==='Enter')setDetailId(destId)}}><div className="room-card-top"><small>Phòng đã chọn</small><span className="floor-chip">{roomGroups[dest.floor].label}</span></div><strong>{displayId(dest.id)}</strong><p className="room-card-name"><RoomName name={dest.name}/></p><span className="room-card-link">Xem thông tin phòng <ChevronRight aria-hidden="true"/></span></div>}
         <div className="legend"><b>Chú thích</b><span><i className="lab"/>Phòng LAB</span><span><i className="class"/>Phòng học</span><span><i className="stair"/>CT1 / CT2</span><span><i className="lift"/>Thang máy</span><span><i className="wc"/>WC Nam / Nữ</span><span><i className="selected"/>Điểm đến</span><span><i className="route"/>Tuyến đường di chuyển</span></div>
       </aside>
       <div className="map-stage"><div className="stage-tools"><button className={showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(true)}}><Building2/>Toàn bộ tòa nhà</button><button className={!showAll&&oneFloor===null?'active':''} onClick={()=>{setOneFloor(null);setShowAll(false)}}><Route/>Tầng của tuyến</button><span><Rotate3D/> Một ngón: dịch chuyển · Hai ngón: xoay / thu phóng</span></div><div ref={host} className="three-host"/><nav className="floor-rail">{FLOOR_LABELS.map((f,i)=><button key={f} className={oneFloor===i?'active':''} onClick={()=>{setOneFloor(i);setShowAll(false)}}>{f}</button>)}</nav></div>
@@ -451,7 +466,7 @@ export default function CampusEMap(){
       </aside>
     </section>
     </>}
-    {tourId&&<section className="tour-screen"><header><button className="journey-back nav-emphasis tour-back" onClick={()=>setTourId(null)}><ArrowLeft aria-hidden="true"/><span>Trở về chỉ đường</span></button><div className="tour-title"><small>Tham quan 3D · {roomGroups[ROOMS.find(r=>r.id===tourId)!.floor].label}</small><strong><b>{displayId(tourId)}</b>{ROOMS.find(r=>r.id===tourId)!.name}</strong></div></header><RoomPreview room={ROOMS.find(r=>r.id===tourId)!}/></section>}
+    {tourId&&<section className="tour-screen"><header><button className="journey-back nav-emphasis tour-back" onClick={()=>setTourId(null)}><ArrowLeft aria-hidden="true"/><span>Trở về chỉ đường</span></button><div className="tour-title"><small>Tham quan 3D · {roomGroups[ROOMS.find(r=>r.id===tourId)!.floor].label}</small><strong><b>{displayId(tourId)}</b><RoomName name={ROOMS.find(r=>r.id===tourId)!.name}/></strong></div></header><RoomPreview room={ROOMS.find(r=>r.id===tourId)!}/></section>}
     {detailId&&<RoomDetail room={ROOMS.find(r=>r.id===detailId)!} route={route} onClose={()=>setDetailId(null)}/>}
     <footer><Footprints/> Tuyến chỉ mang tính định hướng; không thay thế sơ đồ thoát hiểm hoặc chỉ dẫn an toàn tại công trình.</footer>
   </main>

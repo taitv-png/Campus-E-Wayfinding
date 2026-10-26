@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createRoomArchitecture, type RoomOpening } from './room-architecture';
 
 // PDF page 3: 658.08 drawing points correspond to the dimensioned 21.10 m.
 // Furniture dimensions are estimates from Scenes 134–143, not surveyed measurements.
@@ -30,28 +31,19 @@ export function createRoom104(scene: THREE.Scene, furnished: boolean, openings: 
   const grain=new THREE.CanvasTexture(timber);grain.colorSpace=THREE.SRGBColorSpace;grain.wrapS=grain.wrapT=THREE.RepeatWrapping;textures.push(grain);wood.map=grain;
   const floor=box(w,.12,d,0,-.06,0,mat(0xe8e5df));floor.userData.walkable=true;
   const joint=mat(0xc9c9c2);for(let x=-w/2+.6;x<w/2;x+=.6)box(.006,.002,d,x,.002,0,joint);for(let z=-d/2+.6;z<d/2;z+=.6)box(w,.002,.006,0,.002,z,joint);
-  const walls: { group: THREE.Group; normal: THREE.Vector3 }[]=[];
   const overhead=new THREE.Group();scene.add(overhead);
-  const makeWall=(normal:THREE.Vector3)=>{const group=new THREE.Group();scene.add(group);walls.push({group,normal});return group};
-  const back=makeWall(new THREE.Vector3(0,0,-1)),front=makeWall(new THREE.Vector3(0,0,1));
-  box(w,h,.12,0,h/2,-d/2,white.clone(),back);box(w,h,.12,0,h/2,d/2,white.clone(),front);
-  box(w,.075,.04,0,.04,-d/2+.07,steel,back);box(w,.075,.04,0,.04,d/2-.07,steel,front);
   const s=658.08/21.1;
   const pdfDoors=[{from:(160.76-122.12)/s,to:(192.68-122.12)/s},{from:(127.04-122.12)/s,to:(162.2-122.12)/s}];
   const doorRanges=openings==='pdf'?pdfDoors:[{from:.64,to:1.92},{from:.52,to:1.80}];
+  const architectureOpenings:RoomOpening[]=[];
   for(let side=0;side<2;side++){
-    const x=side===0?-w/2:w/2,group=makeWall(new THREE.Vector3(side===0?-1:1,0,0));
+    const wallSide=side===0?'west':'east';
+    architectureOpenings.push({side:wallSide,from:-d/2+doorRanges[side].from,to:-d/2+doorRanges[side].to,top:2.25,kind:'door'});
     const windows=openings==='pdf'?(side===1?[{from:(170.96-122.12)/s,to:(221.48-122.12)/s},{from:(224.6-122.12)/s,to:(271.4-122.12)/s}]:[]):(side===0?[{from:2.17,to:3.65}]:[]);
-    const apertures=[{...doorRanges[side],bottom:0,top:2.25,door:true},...windows.map(o=>({...o,bottom:1.02,top:2.25,door:false}))].sort((a,b)=>a.from-b.from);
-    const wallMat=white.clone();let cursor=0;
-    const segment=(from:number,to:number,bottom:number,top:number,material:THREE.Material)=>{if(to>from&&top>bottom)box(.12,top-bottom,to-from,x,(bottom+top)/2,-d/2+(from+to)/2,material,group)};
-    for(const o of apertures){segment(cursor,o.from,0,h,wallMat);segment(o.from,o.to,0,o.bottom,wallMat);segment(o.from,o.to,o.top,h,wallMat);
-      segment(o.from,o.to,o.bottom+.05,o.top-.05,glass);segment(o.from-.035,o.from+.035,o.bottom,o.top,metal);segment(o.to-.035,o.to+.035,o.bottom,o.top,metal);segment(o.from,o.to,o.top-.045,o.top,metal);segment(o.from,o.to,o.bottom,o.bottom+.045,metal);
-      const mid=(o.from+o.to)/2;segment(mid-.028,mid+.028,o.bottom,o.top,metal);
-      if(o.door){segment(o.from,o.to,.42,.47,metal);for(const offset of [-.09,.09])box(.08,.25,.025,x+(side===0?.06:-.06),1,-d/2+mid+offset,steel,group)}
-      cursor=o.to;
-    }segment(cursor,d,0,h,wallMat);
+    windows.forEach(window=>architectureOpenings.push({side:wallSide,from:-d/2+window.from,to:-d/2+window.to,bottom:1.02,top:2.25,kind:'window'}));
   }
+  const architecture=createRoomArchitecture(scene,{width:w,depth:d,height:h,openings:architectureOpenings,namePrefix:'room104-wall'});
+  const front=architecture.groups.south;
   const addObstacle=(x:number,z:number,a:number,c:number)=>obstacles.push({x,z,w:a,d:c});
   const groups=ROOM_ITEMS.map((_,i)=>{const group=new THREE.Group();group.userData.station=i;scene.add(group);if(furnished)interactables.push(group);return group});
   const screens:THREE.MeshStandardMaterial[]=[];const cabinetDoors:THREE.Group[]=[];const steam:THREE.Mesh[]=[];
@@ -102,10 +94,11 @@ export function createRoom104(scene: THREE.Scene, furnished: boolean, openings: 
   const activate=(i:number)=>{if(i===1||i===6){const key=i===1?'tv':'computers';displayState[key]=!displayState[key];const enabled=displayState[key];(i===1?screens.slice(1,2):screens.slice(2)).forEach(m=>{m.color.set(enabled?0x176d80:0x142127);m.emissiveIntensity=enabled?.8:.08})}if(i===3)cabinetOpen=!cabinetOpen;if(i===4)coffeeUntil=performance.now()+4500;};
   const update=(time:number,dt:number,camera:THREE.Camera,top:boolean)=>{
     overhead.visible=!top;
-    walls.forEach(({group,normal})=>{const facing=camera.position.clone().normalize().dot(normal)>.1;group.visible=!top;group.traverse(o=>{if(o instanceof THREE.Mesh&&o.material!==glass&&!o.userData.faded){const m=o.material as THREE.MeshStandardMaterial;if(m===white||m===steel||m===metal)return;m.transparent=facing;m.opacity=facing?.12:1;m.depthWrite=!facing}})});
+    const settling=architecture.update(camera,top,dt);
     cabinetDoors.forEach((g,i)=>{g.rotation.y=THREE.MathUtils.damp(g.rotation.y,cabinetOpen?(i?1:-1)*1.2:0,9,dt)});
     steam.forEach((p,i)=>{p.visible=time<coffeeUntil;p.position.y=1.10+((time*.00017+i*.06)%.40);p.scale.setScalar(1+(p.position.y-1.1)*2)});
     if(selected>=0&&selection.visible)selection.update();
+    return settling||time<coffeeUntil||cabinetDoors.some((g,i)=>Math.abs(g.rotation.y-(cabinetOpen?(i?1:-1)*1.2:0))>.001);
   };
   return {floor,obstacles,interactables,highlight,activate,update,start:new THREE.Vector3(-w/2+.55,0,-d/2+(doorRanges[0].from+doorRanges[0].to)/2),textures};
 }

@@ -7,6 +7,7 @@ import '../app/kiosk.css';
 import '../app/theme.css';
 import '../app/intro.css';
 import '../app/polish.css';
+import '../app/room-names.css';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><CampusEMap /></React.StrictMode>,

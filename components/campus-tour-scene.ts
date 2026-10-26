@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { commonSpaceName } from './room-catalogue';
+import { createRoomArchitecture, doorOpenings, type RoomOpening } from './room-architecture';
 import { createStudent, type RoomObstacle, type StudentVariant } from './room104-scene';
 
 export type TourRoom={id:string;name:string;floor:number;box:[number,number,number,number];door:[number,number];doors?:[number,number][]};
@@ -29,26 +30,29 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
   const k=kit(scene),{box,mat,white,wood,metal,steel,teal,bar}=k,{width:w,depth:d}=roomSize(room);
   const entry=roomEntry(room),obstacles:RoomObstacle[]=[],interactables:THREE.Object3D[]=[],items:TourItem[]=[],groups:THREE.Group[]=[];
   const floor=box(w,.12,d,0,-.06,0,mat(0xe5e6e2));
-  const walls:THREE.Group[]=[];
-  const wallMat=mat(0xecece7,.22),glass=mat(0x98cad2,.15),faded=mat(0x737d80,.16);
-  // Cut an actual opening at the same side and position as the existing floor plan.
-  for(let side=0;side<4;side++){
-    const g=new THREE.Group();scene.add(g);walls.push(g);const vertical=side<2,length=vertical?d:w;
-    const fixed=(side%2?-1:1)*(vertical?w:d)/2;
-    const sideEntry=(room.doors??[room.door]).map(door=>roomEntry({...room,door})).find(e=>vertical?Math.abs(e.x-fixed)<.1:Math.abs(e.z-fixed)<.1);
-    const hasDoor=!!sideEntry;
-    const at=vertical?(sideEntry?.z??entry.z):(sideEntry?.x??entry.x);
-    const part=(a:number,b:number,y:number,h:number)=>{if(b<=a)return;box(vertical?.1:b-a,h,vertical?b-a:.1,vertical?fixed:(a+b)/2,y,vertical?(a+b)/2:fixed,wallMat,g)};
-    if(hasDoor){part(-length/2,at-.6,1.5,3);part(at+.6,length/2,1.5,3);part(at-.6,at+.6,2.65,.7);
-      for(const offset of [-.61,.61])box(vertical?.12:.055,2.3,vertical?.055:.12,vertical?fixed:at+offset,1.15,vertical?at+offset:fixed,metal,g);
-      box(vertical?.13:1.25,.08,vertical?1.25:.13,vertical?fixed:at,2.3,vertical?at:fixed,metal,g);
-    }else{
-      // Low sill + transparent window band keeps the cutaway readable.
-      part(-length/2,length/2,.45,.9);part(-length/2,length/2,2.8,.4);
-      box(vertical?.06:length,1.65,vertical?length:.06,vertical?fixed:0,1.75,vertical?0:fixed,glass,g);
-      for(let a=-length/2+.9;a<length/2;a+=1.3)box(vertical?.08:.04,1.65,vertical?.04:.08,vertical?fixed:a,1.75,vertical?a:fixed,mat(0x4e6266,.35),g);
+  const faded=mat(0x737d80,.16);
+  const architectureOpenings:RoomOpening[]=doorOpenings((room.doors??[room.door]).map(door=>roomEntry({...room,door})),w,d);
+  if(room.id==='E102'){
+    // Render 109 shows the paired glazed bays beside the corridor entrance;
+    // partition walls behind the display grids remain solid.
+    const northDoor=architectureOpenings.find(opening=>opening.side==='north');
+    if(northDoor){
+      architectureOpenings.push({side:'north',from:-w/2+.32,to:northDoor.from-.28,kind:'window'});
+      if(w/2-.32-northDoor.to>.5)architectureOpenings.push({side:'north',from:northDoor.to+.28,to:w/2-.32,kind:'window'});
+    }
+  }else if(room.id==='E401'){
+    // The supplied renders put glazing opposite the corridor door, rather than
+    // on every non-door wall of the earlier generic classroom.
+    for(const z of [-d/2+2.3,0,d/2-2.3])architectureOpenings.push({side:'east',from:z-.86,to:z+.86,kind:'window'});
+  }else{
+    const exteriorSide=room.box[0]<1?'west':room.box[2]>9?'east':'south';
+    const length=exteriorSide==='south'?w:d;
+    for(let at=-length/2+1.55;at<length/2-.7;at+=2.7){
+      if(architectureOpenings.some(opening=>opening.side===exteriorSide&&at+.8>opening.from-.2&&at-.8<opening.to+.2))continue;
+      architectureOpenings.push({side:exteriorSide,from:at-.8,to:Math.min(at+.8,length/2-.2),kind:'window'});
     }
   }
+  const architecture=createRoomArchitecture(scene,{width:w,depth:d,openings:architectureOpenings,namePrefix:'teaching-wall'});
   const add=(name:string,x:number,z:number,description:string,action='Tìm hiểu')=>{const i=items.length;items.push({name,x,z,title:name,description,action});const g=new THREE.Group();g.userData.station=i;scene.add(g);groups.push(g);if(furnished)interactables.push(g);return g};
   const obstacle=(x:number,z:number,w:number,d:number)=>obstacles.push({x,z,w,d});
   const desk=(x:number,z:number,width:number,g:THREE.Group)=>{box(width,.055,.55,x,.75,z,wood,g);for(const dx of [-width/2+.1,width/2-.1]){box(.045,.72,.045,x+dx,.36,z,steel,g);box(.06,.05,.55,x+dx,.04,z,steel,g)}obstacle(x,z,width,.55)};
@@ -74,7 +78,7 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
     desk(teacherX,-d/2+1.0,1.35,teacher);screen(teacherX,-d/2+1.0,teacher,.55,1.05);chair(teacherX,-d/2+1.6,teacher);
     if(room.id==='E102'){
       const display=add('Vách lưới trưng bày',w/2-.35,0,'Vách lưới đen dọc hai bên phòng, dùng treo và trưng bày học liệu.');
-      for(const side of [-1,1])for(let z=-d/2+2.6;z<d/2-.5;z+=2.2){if(Math.abs(side*w/2-entry.x)<.2&&Math.abs(z-entry.z)<1.7)continue;const x=side*(w/2-.15);for(let a=-.85;a<=.85;a+=.14)box(.025,2.05,.012,x,1.05,z+a,metal,display);for(let y=.1;y<2.2;y+=.14)box(.025,.012,1.75,x,y,z,metal,display)}
+      for(const side of [-1,1])for(let z=-d/2+2.6;z<d/2-.5;z+=2.2){if((room.doors??[room.door]).map(door=>roomEntry({...room,door})).some(e=>Math.abs(side*w/2-e.x)<.2&&Math.abs(z-e.z)<1.7))continue;const x=side*(w/2-.15);for(let a=-.85;a<=.85;a+=.14)box(.025,2.05,.012,x,1.05,z+a,metal,display);for(let y=.1;y<2.2;y+=.14)box(.025,.012,1.75,x,y,z,metal,display)}
       const shelf=add('Kệ học liệu',w/2-.75,-d/2+.25,'Kệ mở ở cuối phòng, cạnh bàn máy tính và khu hậu kỳ.');
       for(let y=.15;y<2.3;y+=.35)box(1.25,.035,.38,w/2-.75,y,-d/2+.24,metal,shelf);obstacle(w/2-.75,-d/2+.24,1.25,.4);
     }
@@ -98,7 +102,7 @@ export function createTeachingRoom(scene:THREE.Scene,room:TourRoom,furnished:boo
   return {floor,obstacles,interactables,items,width:w,depth:d,start:entry.start,portals:(room.doors??[room.door]).map(door=>{const e=roomEntry({...room,door});return {id:'exit',label:'Ra hành lang',x:e.x,z:e.z,kind:'exit' as const}}),
     highlight:(i:number)=>{selected=i;selection.visible=i>=0&&furnished;if(selection.visible)selection.setFromObject(groups[i])},
     activate:(i:number)=>{active.has(i)?active.delete(i):active.add(i);const on=active.has(i);const screenIndex=i===1&&special?0:i===2?(special?1:0):-1;const m=screens[screenIndex];if(m){m.emissiveIntensity=on?.9:.05;m.color.set(on?0x287e91:0x18292d)}if(!special&&i===1)notes.visible=on},
-    update:(time:number,dt:number,camera:THREE.Camera,top:boolean)=>{walls.forEach(g=>g.visible=!top);moving.forEach((o,i)=>{if(i<2&&active.has(3))o.rotation.z+=dt*3;else if(i>=2){o.visible=active.has(4);o.position.y=1.5+Math.sin(time*.002)*.3}});if(selected>=0)selection.update()}
+    update:(time:number,dt:number,camera:THREE.Camera,top:boolean)=>{const settling=architecture.update(camera,top,dt);moving.forEach((o,i)=>{if(i<2&&active.has(3))o.rotation.z+=dt*3;else if(i>=2){o.visible=active.has(4);o.position.y=1.5+Math.sin(time*.002)*.3}});if(selected>=0)selection.update();return settling||active.has(3)||active.has(4)}
   };
 }
 
