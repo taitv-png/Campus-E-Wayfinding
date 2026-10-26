@@ -94,7 +94,7 @@ export function createHologramLab(scene: THREE.Scene, room: TourRoom, furnished:
     const openings: RoomOpening[] = doorOpenings(entries, w, d);
     const entry = entries[0];
     // The corridor glazing and the far-end windows are visible in 5017/5023/5024.
-    openings.push({ side: 'east', from: -d / 2 + .30, to: entry.z - .87, bottom: .78, top: 2.57, kind: 'window' }, { side: 'east', from: entry.z + .87, to: .35, bottom: .78, top: 2.57, kind: 'window' }, { side: 'north', from: -w / 2 + .36, to: -.10, bottom: .84, top: 2.36, kind: 'window' }, { side: 'north', from: .10, to: w / 2 - .36, bottom: .84, top: 2.36, kind: 'window' });
+    openings.push({ side: 'east', from: -d / 2 + .30, to: entry.z - .87, bottom: .10, top: 2.57, kind: 'window' }, { side: 'east', from: entry.z + .87, to: .35, bottom: .10, top: 2.57, kind: 'window' }, { side: 'north', from: -w / 2 + .36, to: -.10, bottom: .84, top: 2.36, kind: 'window' }, { side: 'north', from: .10, to: w / 2 - .36, bottom: .84, top: 2.36, kind: 'window' });
     const architecture = createRoomArchitecture(scene, { width: w, depth: d, height: h, openings, namePrefix: 'hologram-wall' });
     const obstacle = (x: number, z: number, width: number, depth: number) => obstacles.push({ x, z, w: width, d: depth });
     const add = (name: string, x: number, z: number, description: string, action = 'Tìm hiểu') => {
