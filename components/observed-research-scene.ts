@@ -1,3 +1,4 @@
+import { tr } from './locale';
 import * as THREE from 'three';
 import { roomEntry, roomSize, type Portal, type TourItem, type TourRoom } from './campus-tour-scene';
 import { createRoomArchitecture, doorOpenings, type RoomOpening, type WallSide } from './room-architecture';
@@ -111,7 +112,7 @@ export function createObservedResearchRoom(scene: THREE.Scene, room: TourRoom, f
     // the plaster cover the board when its corner is closer to the camera.
     object.renderOrder = 8; object.castShadow = object.receiveShadow = false; return object;
   };
-  const add = (name: string, x: number, z: number, title: string, description: string, action = 'Tìm hiểu') => {
+  const add = (name: string, x: number, z: number, title: string, description: string, action = tr("Tìm hiểu", "Learn more")) => {
     const index = items.length, group = new THREE.Group(); group.userData.station = index; group.name = `${room.id}-station-${index}`; group.visible = furnished; furniture.add(group);
     const point = toWorld(x, z);
     items.push({ name, ...point, title, description, action }); groups.push(group); if (furnished) interactables.push(group); return group;
@@ -151,10 +152,10 @@ export function createObservedResearchRoom(scene: THREE.Scene, room: TourRoom, f
   };
 
   if (furnished && layout === 'automation') {
-    const benches = add('Bàn máy tính thực hành', .2, -.3, 'Hai dãy bàn gỗ · máy tính thực hành', 'Hai dãy bàn dài chia khoang, màn hình đen và ghế màu kem xen xanh lá. Số chỗ và khoảng cách được ước lượng từ ảnh hiện trạng.', 'Bật / tắt màn hình');
-    const training = add('Hệ thống tự động hóa', -w / 2 + .65, -1.5, 'Cụm robot và mô-đun thực hành', 'Thiết bị thực hành cơ điện tử có vỏ máy trắng, tủ che khung nhôm, mô-đun cơ khí và đường khí nén. Hình học mô tả hình dáng quan sát được, không khẳng định cấu hình máy.', 'Chạy / dừng mô phỏng');
-    const storage = add('Tủ thiết bị', -w / 2 + .55, 2.6, 'Tủ gỗ cao · cánh kính', 'Tủ gỗ màu nâu với bốn cánh kính, các tầng chứa hộp linh kiện và học cụ, đặt cạnh cụm máy ở đầu phòng.');
-    const teaching = add('Bảng & bàn giảng viên', -.8, d / 2 - .8, 'Bảng trắng · máy chiếu · bàn trắng', 'Khu hướng dẫn ở đầu phòng, gồm bảng trắng, màn cuốn, bàn máy tính trắng và ghế xoay đen.', 'Bật / tắt trình chiếu');
+    const benches = add(tr("Bàn máy tính thực hành", "Training computer desks"), .2, -.3, tr("Hai dãy bàn gỗ · máy tính thực hành", "Two banks of wood computer desks"), tr("Hai dãy bàn dài chia khoang, màn hình đen và ghế màu kem xen xanh lá. Số chỗ và khoảng cách được ước lượng từ ảnh hiện trạng.", "Two long divided desk banks with black monitors and cream and green chairs. Seating and spacing are estimated from the site photos."), tr("Bật / tắt màn hình", "Screen on / off"));
+    const training = add(tr("Hệ thống tự động hóa", "Automation training system"), -w / 2 + .65, -1.5, tr("Cụm robot và mô-đun thực hành", "Robot and training modules"), tr("Thiết bị thực hành cơ điện tử có vỏ máy trắng, tủ che khung nhôm, mô-đun cơ khí và đường khí nén. Hình học mô tả hình dáng quan sát được, không khẳng định cấu hình máy.", "Mechatronics training equipment with a white base, an aluminum-framed enclosure, mechanical modules and pneumatic lines. The model represents visible shapes; it does not specify the machine configuration."), tr("Chạy / dừng mô phỏng", "Start / stop simulation"));
+    const storage = add(tr("Tủ thiết bị", "Equipment cabinet"), -w / 2 + .55, 2.6, tr("Tủ gỗ cao · cánh kính", "Tall wood cabinet with glass doors"), tr("Tủ gỗ màu nâu với bốn cánh kính, các tầng chứa hộp linh kiện và học cụ, đặt cạnh cụm máy ở đầu phòng.", "A brown wood cabinet with four glass doors and shelves of component boxes and teaching materials, beside the training equipment."));
+    const teaching = add(tr("Bảng & bàn giảng viên", "Whiteboard and instructor desk"), -.8, d / 2 - .8, tr("Bảng trắng · máy chiếu · bàn trắng", "Whiteboard, projector and white desk"), tr("Khu hướng dẫn ở đầu phòng, gồm bảng trắng, màn cuốn, bàn máy tính trắng và ghế xoay đen.", "The teaching area has a whiteboard, roller screen, white computer desk and black swivel chair."), tr("Bật / tắt trình chiếu", "Projection on / off"));
     const benchX = [-.25, Math.min(1.65, w / 2 - .99)], first = -d / 2 + 2.15, pitch = Math.min(1.12, (d - 4.2) / 6);
     for (const [bank, x] of benchX.entries()) {
       box(.66, .045, 6 * pitch, x, .755, first + 2.5 * pitch, wood, benches); box(.035, .71, 6 * pitch, x - .30, .37, first + 2.5 * pitch, wood, benches); obstacle(x, first + 2.5 * pitch, .68, 6 * pitch);
@@ -185,10 +186,10 @@ export function createObservedResearchRoom(scene: THREE.Scene, room: TourRoom, f
   }
 
   if (furnished && room.id === 'E302') {
-    const arena = add('Sân thử nghiệm có lưới', .25, -.3, 'Khung lưới bảo vệ · sàn đường thử', 'Khung lưới đen bao quanh sân thử drone và robot di động. Lối mở phía sau cho phép quan sát bên trong; số thiết bị và kích thước là ước lượng từ bốn ảnh sân lưới.', 'Chạy / dừng thử nghiệm');
-    const consoleGroup = add('Bàn điều khiển', -w / 2 + 1.0, d / 2 - 1.8, 'Bàn đen · ba màn hình', 'Bàn điều khiển ba màn hình, bàn phím, chuột và bộ điều khiển cầm tay đặt phía ngoài lưới bảo vệ.', 'Bật / tắt màn hình');
-    const robots = add('Drone & robot di động', .3, 1.5, 'Thiết bị trên sân thử', 'Drone nhiều cánh quạt và robot di động có cột cảm biến được mô tả theo hình dáng trong ảnh. Chuyển động là minh họa, không phản ánh máy đang vận hành.', 'Chạy / dừng robot');
-    const seats = add('Khu quan sát', 0, d / 2 - .6, 'Ghế chờ màu đen', 'Dãy ghế chờ và hộp thiết bị bên ngoài sân lưới, ở phía đối diện cửa vào.');
+    const arena = add(tr("Sân thử nghiệm có lưới", "Netted test arena"), .25, -.3, tr("Khung lưới bảo vệ · sàn đường thử", "Safety-net enclosure and marked test floor"), tr("Khung lưới đen bao quanh sân thử drone và robot di động. Lối mở phía sau cho phép quan sát bên trong; số thiết bị và kích thước là ước lượng từ bốn ảnh sân lưới.", "A black safety-net enclosure surrounds the drone and mobile-robot test floor. An opening at the back provides access. Equipment counts and dimensions are estimated from four arena photos."), tr("Chạy / dừng thử nghiệm", "Start / stop demonstration"));
+    const consoleGroup = add(tr("Bàn điều khiển", "Control desk"), -w / 2 + 1.0, d / 2 - 1.8, tr("Bàn đen · ba màn hình", "Black desk with three monitors"), tr("Bàn điều khiển ba màn hình, bàn phím, chuột và bộ điều khiển cầm tay đặt phía ngoài lưới bảo vệ.", "A control desk with three monitors, keyboard, mouse and handheld controllers outside the safety net."), tr("Bật / tắt màn hình", "Screen on / off"));
+    const robots = add(tr("Drone & robot di động", "Drones and mobile robots"), .3, 1.5, tr("Thiết bị trên sân thử", "Test-floor equipment"), tr("Drone nhiều cánh quạt và robot di động có cột cảm biến được mô tả theo hình dáng trong ảnh. Chuyển động là minh họa, không phản ánh máy đang vận hành.", "Multi-rotor drones and mobile robots with sensor masts follow the visible shapes in the photos. Their movement is a demonstration and does not indicate that real equipment is operating."), tr("Chạy / dừng robot", "Start / stop robots"));
+    const seats = add(tr("Khu quan sát", "Observation area"), 0, d / 2 - .6, tr("Ghế chờ màu đen", "Black waiting chairs"), tr("Dãy ghế chờ và hộp thiết bị bên ngoài sân lưới, ở phía đối diện cửa vào.", "A row of waiting chairs and equipment boxes outside the netted arena, opposite the entrance."));
     const cx = .05, cz = -.45, aw = Math.min(4.5, w - 2.1), ad = d - 4.0, x0 = cx - aw / 2, x1 = cx + aw / 2, z0 = cz - ad / 2, z1 = cz + ad / 2;
     const track = drawingTexture(768, 1280, ctx => {
       ctx.fillStyle = '#343a3d'; ctx.fillRect(0, 0, 768, 1280); ctx.strokeStyle = '#7f8a8d'; ctx.lineWidth = 1.3;
@@ -220,10 +221,10 @@ export function createObservedResearchRoom(scene: THREE.Scene, room: TourRoom, f
   }
 
   if (furnished && layout === 'road') {
-    const trackGroup = add('Sa bàn đường thử', .1, 0, 'Thảm đường thử robot di động', 'Thảm đen trải gần hết sàn, có làn đường cong, vạch đứt, chỗ đỗ, vạch sang đường và vùng đánh dấu xanh theo ảnh. Đây là mặt sàn có thể đi trên.');
-    const vehicles = add('Dãy robot di động', .7, -d / 2 + .65, 'Robot bánh xe · mô-đun cảm biến', 'Các robot thử nghiệm nhiều kích thước xếp dọc mép thảm, có bánh xe, mặt mạch và cảm biến. Số lượng và tỷ lệ được ước lượng từ ảnh.', 'Chạy / dừng robot');
-    const teaching = add('Bàn điều khiển & bảng', w / 2 - 1.0, -d / 2 + .8, 'Bàn máy tính trắng · bảng trắng', 'Bàn điều khiển có máy tính, ghế xoay đen và tủ thấp, cạnh bảng trắng và màn cuốn.', 'Bật / tắt màn hình');
-    const seating = add('Ghế & rèm cửa', w / 2 - .7, d / 2 - .55, 'Ghế chờ · rèm lá dọc', 'Ghế chờ kem và cam ở đầu phòng; rèm lá dọc che cụm kính lớn phía cuối phòng.');
+    const trackGroup = add(tr("Sa bàn đường thử", "Road-test layout"), .1, 0, tr("Thảm đường thử robot di động", "Mobile-robot road mat"), tr("Thảm đen trải gần hết sàn, có làn đường cong, vạch đứt, chỗ đỗ, vạch sang đường và vùng đánh dấu xanh theo ảnh. Đây là mặt sàn có thể đi trên.", "A black mat covers most of the floor, with curved lanes, dashed markings, parking bays, crossings and a green marked area based on the photos. You can walk across this floor."));
+    const vehicles = add(tr("Dãy robot di động", "Parked mobile robots"), .7, -d / 2 + .65, tr("Robot bánh xe · mô-đun cảm biến", "Wheeled robots and sensor modules"), tr("Các robot thử nghiệm nhiều kích thước xếp dọc mép thảm, có bánh xe, mặt mạch và cảm biến. Số lượng và tỷ lệ được ước lượng từ ảnh.", "Test robots of different sizes line the edge of the mat, with wheels, circuit boards and sensors. Their number and proportions are estimated from the photos."), tr("Chạy / dừng robot", "Start / stop robots"));
+    const teaching = add(tr("Bàn điều khiển & bảng", "Control desk and whiteboard"), w / 2 - 1.0, -d / 2 + .8, tr("Bàn máy tính trắng · bảng trắng", "White computer desk and whiteboard"), tr("Bàn điều khiển có máy tính, ghế xoay đen và tủ thấp, cạnh bảng trắng và màn cuốn.", "A computer control desk, black swivel chair and low cabinet beside the whiteboard and roller screen."), tr("Bật / tắt màn hình", "Screen on / off"));
+    const seating = add(tr("Ghế & rèm cửa", "Seating and blinds"), w / 2 - .7, d / 2 - .55, tr("Ghế chờ · rèm lá dọc", "Waiting chairs and vertical blinds"), tr("Ghế chờ kem và cam ở đầu phòng; rèm lá dọc che cụm kính lớn phía cuối phòng.", "Cream and orange waiting chairs at the front, with vertical blinds over the large glazed bay at the far end."));
     const tw = w - 1.5, td = d - 1.25, cx = -.05, cz = .10;
     const road = drawingTexture(1536, 896, ctx => {
       ctx.fillStyle = '#34383b'; ctx.fillRect(0, 0, 1536, 896);
@@ -271,7 +272,7 @@ export function createObservedResearchRoom(scene: THREE.Scene, room: TourRoom, f
   if (furnished && layout === 'automation') mountedBox(1.65, .76, .012, -.15, 1.68, d / 2 - .13, mat(0x9bc4c6), 'south', projection);
   const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xf17b38); selection.visible = false; scene.add(selection);
   let selected = -1;
-  const portals: Portal[] = worldDoors.map((entry, index) => ({ id: `exit-${index}`, label: 'Ra hành lang', x: entry.x, z: entry.z, kind: 'exit' }));
+  const portals: Portal[] = worldDoors.map((entry, index) => ({ id: `exit-${index}`, label: tr("Ra hành lang", "To the corridor"), x: entry.x, z: entry.z, kind: 'exit' }));
   scene.userData.observedRoomSurvey = { ...RESEARCH_ROOM_SURVEYS[room.id as keyof typeof RESEARCH_ROOM_SURVEYS], openings: architectureOpenings, estimates: true };
   return {
     floor, obstacles, interactables, items, width, depth, start: roomEntry(room).start, portals,

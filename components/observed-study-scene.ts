@@ -1,3 +1,4 @@
+import { tr } from './locale';
 import * as THREE from 'three';
 import { roomEntry, roomSize, type Portal, type TourItem, type TourRoom } from './campus-tour-scene';
 import type { RoomObstacle } from './room104-scene';
@@ -49,7 +50,7 @@ export function createObservedStudyRoom(scene: THREE.Scene, room: TourRoom, furn
       { side: 'north', from: center + .9, to: w / 2 - .4, bottom: .86, top: 2.43, kind: 'window' });
   }
   const architecture = createRoomArchitecture(scene, { width: w, depth: d, height: h, openings, namePrefix: `observed-${room.id}` });
-  const add = (name: string, x: number, z: number, description: string, action = 'Tìm hiểu') => {
+  const add = (name: string, x: number, z: number, description: string, action = tr("Tìm hiểu", "Learn more")) => {
     const index = items.length; items.push({ name, x, z, title: name, description, action });
     const group = new THREE.Group(); group.name = `${room.id}-station-${index}`; group.userData.station = index;
     group.visible = furnished; scene.add(group); groups.push(group); if (furnished) interactables.push(group); return group;
@@ -116,11 +117,11 @@ export function createObservedStudyRoom(scene: THREE.Scene, room: TourRoom, furn
       }
       box(.13, .05, aperture.to - aperture.from + .08, w / 2 - .08, 2.51, (aperture.from + aperture.to) / 2, steel, blinds);
     }
-    const meeting = add('Khu tiếp khách & trao đổi', .1, -3.1, 'Bàn họp mặt tối, ghế lưới đen và bàn làm việc gỗ sẫm ở đầu phòng, đối chiếu ảnh 5102–5104.');
-    const teaching = add('Cụm bàn học chữ U', .25, 2.0, 'Các bàn gỗ khung thép ghép thành cụm, ghế kem xen cam và xanh lá; hướng và số chỗ dựng theo ảnh 5105–5107.');
-    deskIndex = items.length; const work = add('Bàn máy tính', .15, d / 2 - .8, 'Bàn trắng và màn hình trên tay đỡ ở cuối phòng, cạnh tủ cao trắng.', 'Bật / tắt máy tính');
-    boardIndex = items.length; const writing = add('Bảng trắng & màn cuốn', 0, -d / 2 + .35, 'Bảng trắng lớn ở đầu phòng; hộp màn chiếu cuốn ở phía trên theo ảnh 5103.', 'Bật / tắt trình chiếu');
-    const literature = add('Giá tài liệu & bàn đứng', .5, .35, 'Giá gấp kim loại nhiều khay gần cột; bàn đứng tròn và cần đỡ đặt ở hốc tường cạnh cửa.');
+    const meeting = add(tr("Khu tiếp khách & trao đổi", "Reception and discussion area"), .1, -3.1, tr("Bàn họp mặt tối, ghế lưới đen và bàn làm việc gỗ sẫm ở đầu phòng, đối chiếu ảnh 5102–5104.", "A dark-top meeting table, black mesh chairs and a dark wood desk at the front, based on photos 5102-5104."));
+    const teaching = add(tr("Cụm bàn học chữ U", "U-shaped study tables"), .25, 2.0, tr("Các bàn gỗ khung thép ghép thành cụm, ghế kem xen cam và xanh lá; hướng và số chỗ dựng theo ảnh 5105–5107.", "Wood tables with steel frames form a group, with cream, orange and green chairs. Orientation and seating are estimated from photos 5105-5107."));
+    deskIndex = items.length; const work = add(tr("Bàn máy tính", "Computer desk"), .15, d / 2 - .8, tr("Bàn trắng và màn hình trên tay đỡ ở cuối phòng, cạnh tủ cao trắng.", "A white desk with an arm-mounted monitor at the far end, beside a tall white cabinet."), tr("Bật / tắt máy tính", "Computer on / off"));
+    boardIndex = items.length; const writing = add(tr("Bảng trắng & màn cuốn", "Whiteboard and roller screen"), 0, -d / 2 + .35, tr("Bảng trắng lớn ở đầu phòng; hộp màn chiếu cuốn ở phía trên theo ảnh 5103.", "A large whiteboard at the front with a roller-screen housing above, as shown in photo 5103."), tr("Bật / tắt trình chiếu", "Projection on / off"));
+    const literature = add(tr("Giá tài liệu & bàn đứng", "Brochure rack and standing table"), .5, .35, tr("Giá gấp kim loại nhiều khay gần cột; bàn đứng tròn và cần đỡ đặt ở hốc tường cạnh cửa.", "A folding metal brochure rack near the column, with a round standing table and support arm in the wall recess beside the entrance."));
     if (furnished) {
       table(.42, -3.45, 1.13, 1.93, meeting, darkTop, true);
       for (const z of [-3.96, -2.96]) { chair(-.52, z, -Math.PI / 2, meeting, black, true); chair(1.35, z, Math.PI / 2, meeting, black, true); }
@@ -152,12 +153,12 @@ export function createObservedStudyRoom(scene: THREE.Scene, room: TourRoom, furn
       rod(new THREE.Vector3(standX - .25, 1.08, standZ), new THREE.Vector3(standX, 1.48, standZ), .014, black, literature);
     }
   } else {
-    const benches = add('Bàn nghiên cứu có vách kính', 0, -3.65, 'Hai bàn trắng có vách kính mờ xanh nhạt, ghế lưới đen; kệ thấp nâu và khoang tủ trắng ở đầu cụm theo ảnh 5084–5088.');
-    const meeting = add('Bàn trao đổi nhóm', 0, -.15, 'Bàn chữ nhật mặt gỗ, các ghế nhựa kem và xanh lá ở khu giữa phòng.');
-    const conference = add('Bàn họp & ghế bọc đệm', -.10, 2.9, 'Bàn họp lớn mặt tối và ghế đen tay gỗ tại khu cuối phòng, đối chiếu ảnh 5094–5099.');
-    deskIndex = items.length; const work = add('Bàn máy tính & tủ hồ sơ', w / 2 - .65, 3.8, 'Bàn trắng có màn hình trên tay đỡ và các ghế văn phòng; tủ hồ sơ gỗ sẫm cao cạnh bảng.', 'Bật / tắt máy tính');
-    boardIndex = items.length; const writing = add('Bảng trắng & máy chiếu', -.8, d / 2 - .35, 'Bảng trắng khung đen, màn chiếu cuốn và máy chiếu trần ở đầu khu họp.', 'Bật / tắt trình chiếu');
-    const sideboard = add('Bàn dài sát tường', w / 2 - .45, 1.6, 'Bàn gỗ dài sát tường phía cửa bên, giữ lối đi từ hai cửa vào khu trao đổi.');
+    const benches = add(tr("Bàn nghiên cứu có vách kính", "Partitioned research desks"), 0, -3.65, tr("Hai bàn trắng có vách kính mờ xanh nhạt, ghế lưới đen; kệ thấp nâu và khoang tủ trắng ở đầu cụm theo ảnh 5084–5088.", "Two white desks with pale green frosted dividers and black mesh chairs. Low brown shelves and white storage units sit at the ends, based on photos 5084-5088."));
+    const meeting = add(tr("Bàn trao đổi nhóm", "Group discussion table"), 0, -.15, tr("Bàn chữ nhật mặt gỗ, các ghế nhựa kem và xanh lá ở khu giữa phòng.", "A rectangular wood-top table with cream and green plastic chairs in the middle of the room."));
+    const conference = add(tr("Bàn họp & ghế bọc đệm", "Meeting table and padded chairs"), -.10, 2.9, tr("Bàn họp lớn mặt tối và ghế đen tay gỗ tại khu cuối phòng, đối chiếu ảnh 5094–5099.", "A large dark-top meeting table with black chairs and wood armrests at the far end, based on photos 5094-5099."));
+    deskIndex = items.length; const work = add(tr("Bàn máy tính & tủ hồ sơ", "Computer desk and storage cabinet"), w / 2 - .65, 3.8, tr("Bàn trắng có màn hình trên tay đỡ và các ghế văn phòng; tủ hồ sơ gỗ sẫm cao cạnh bảng.", "A white desk with arm-mounted monitors and office chairs. A tall dark wood cabinet stands beside the whiteboard."), tr("Bật / tắt máy tính", "Computer on / off"));
+    boardIndex = items.length; const writing = add(tr("Bảng trắng & máy chiếu", "Whiteboard and projector"), -.8, d / 2 - .35, tr("Bảng trắng khung đen, màn chiếu cuốn và máy chiếu trần ở đầu khu họp.", "A black-framed whiteboard, roller screen and ceiling projector at the front of the meeting area."), tr("Bật / tắt trình chiếu", "Projection on / off"));
+    const sideboard = add(tr("Bàn dài sát tường", "Wall-side console tables"), w / 2 - .45, 1.6, tr("Bàn gỗ dài sát tường phía cửa bên, giữ lối đi từ hai cửa vào khu trao đổi.", "Long wood console tables along the side-entrance wall, with clear aisles from both entrances to the discussion area."));
     if (furnished) {
       const mint = new THREE.MeshStandardMaterial({ color: 0xb8d5d1, roughness: .38, transparent: true, opacity: .76, depthWrite: false });
       for (const side of [-1, 1]) {
@@ -238,7 +239,7 @@ export function createObservedStudyRoom(scene: THREE.Scene, room: TourRoom, furn
   const blindWall = architecture.walls.find(wall => wall.side === 'east');
   const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xec792f); selection.visible = false; scene.add(selection);
   let selected = -1, computerOn = false;
-  const portals: Portal[] = entries.map((entry, index) => ({ id: `exit-${index}`, label: 'Ra hành lang', x: entry.x, z: entry.z, kind: 'exit' }));
+  const portals: Portal[] = entries.map((entry, index) => ({ id: `exit-${index}`, label: tr("Ra hành lang", "To the corridor"), x: entry.x, z: entry.z, kind: 'exit' }));
   scene.userData.observedRoomSurvey = { room: room.id, source: is201 ? 'IMG_5102–5107' : 'IMG_5084–5100', estimated: true,
     openings, fixedColumns: is201 ? [{ x: -.03, z: .08 }] : [] };
   return {

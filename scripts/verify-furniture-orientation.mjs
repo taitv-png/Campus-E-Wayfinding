@@ -39,19 +39,7 @@ function compile(relativeFile) {
 }
 const { createRoomTour } = await import(compile('components/room-tour.ts'));
 const { ROOM_SURVEYS } = await import(compile('components/room-surveys.ts'));
-const catalogueUrl = compile('components/room-catalogue.ts');
-const computerUrl = compile('components/computer-lab-scene.ts');
-const campus = fs.readFileSync(path.join(root, 'components/CampusEMap.tsx'), 'utf8');
-const definitions = [
-  `import { ROOM_CATALOGUE } from '${catalogueUrl}';`,
-  `import { isInstalledComputerLab } from '${computerUrl}';`,
-  campus.slice(campus.indexOf('const FLOOR_LABELS'), campus.indexOf('const PLACES')),
-  'export { floorRooms };',
-].join('\n');
-const definitionsJs = ts.transpileModule(definitions, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const { floorRooms } = await import('data:text/javascript;base64,' + Buffer.from(definitionsJs).toString('base64'));
+const { floorRooms } = await import(compile('components/floor-rooms.ts'));
 const rooms = Array.from({ length: 8 }, (_, floor) => floorRooms(floor)).flat();
 const near = (a, b, tolerance = .006) => Math.abs(a - b) < tolerance;
 const horizontal = vector => vector.clone().setY(0);

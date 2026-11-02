@@ -1,3 +1,4 @@
+import { tr } from './locale';
 import * as THREE from 'three';
 import { roomEntry, roomSize, type Portal, type TourItem, type TourRoom } from './campus-tour-scene';
 import type { RoomObstacle } from './room104-scene';
@@ -72,18 +73,18 @@ export function createComputerLabRoom(scene: THREE.Scene, room: TourRoom, furnis
   const architecture = createRoomArchitecture(scene, { width: w, depth: d, height: h, openings: architecturalOpenings });
   const openingMetadata = architecture.openings;
 
-  const add = (name: string, x: number, z: number, title: string, description: string, action = 'Tìm hiểu') => {
+  const add = (name: string, x: number, z: number, title: string, description: string, action = tr("Tìm hiểu", "Learn more")) => {
     const index = items.length; items.push({ name, x, z, title, description, action });
     const group = new THREE.Group(); group.name = `survey-station-${index}`; group.userData.station = index;
     group.visible = furnished; scene.add(group); groups.push(group); if (furnished) interactables.push(group); return group;
   };
-  const north = add('Dãy máy sát cửa sổ', .1, -2.95, 'Bàn máy tính · dãy 5 chỗ', 'Dãy bàn gỗ có viền đen, màn hình lưng bạc, bàn phím và chuột. Bố trí các hàng được ước lượng từ ảnh hiện trạng.', 'Bật / tắt màn hình');
-  const middle = add('Dãy máy giữa', .1, 1.1, 'Bàn máy tính · dãy 3 chỗ', 'Cụm máy giữa phòng, hai bên có lối đi và cột kết cấu. Ghế nhựa màu kem xen xanh lá và cam theo ảnh hiện trạng.', 'Bật / tắt màn hình');
-  const south = add('Dãy máy sát tường', .1, 4.08, 'Bàn máy tính · dãy 2 chỗ', 'Cụm bàn hai chỗ bên tường đặc, ghế ngồi hướng về bảng trắng và mặt màn hình quay về phía người dùng.', 'Bật / tắt màn hình');
-  const teacher = add('Bàn giảng viên', -w / 2 + 1, d / 2 - 1.12, 'Bàn trắng · ghế xoay đen', 'Bàn giảng viên ở góc đầu phòng phía tường đặc, có máy tính và ghế xoay tựa lưới.', 'Bật / tắt máy giảng viên');
-  const board = add('Bảng & trình chiếu', -w / 2 + .35, 0, 'Bảng trắng dài · màn chiếu cuốn', 'Bảng trắng trên tường đầu phòng. Máy chiếu treo trần và hộp màn chiếu cuốn dựng theo ảnh; nút bật chỉ minh họa trình chiếu.', 'Bật / tắt trình chiếu');
-  const openings = add('Cửa & cửa sổ', w / 2 - 1, -d / 2 + .5, 'Ba lối vào · ba cụm cửa sổ', 'Hai cửa trên dãy vách kính, một cửa trên tường cuối phòng phía cầu thang. Các khung kính màu sẫm có dải mờ ngang như ảnh hiện trạng.');
-  const equipment = add('Thiết bị trong phòng', 0, -.6, 'Máy chiếu · điều hòa · quạt', 'Máy chiếu trần, các máy điều hòa treo tường, quạt và đèn LED vuông được tái dựng từ ảnh hiện trạng.');
+  const north = add(tr("Dãy máy sát cửa sổ", "Window-side computers"), .1, -2.95, tr("Bàn máy tính · dãy 5 chỗ", "Computer desks: five-place bank"), tr("Dãy bàn gỗ có viền đen, màn hình lưng bạc, bàn phím và chuột. Bố trí các hàng được ước lượng từ ảnh hiện trạng.", "Wood desks with black edging, silver-backed monitors, keyboards and mice. Row placement is estimated from site photos."), tr("Bật / tắt màn hình", "Screen on / off"));
+  const middle = add(tr("Dãy máy giữa", "Central computer bank"), .1, 1.1, tr("Bàn máy tính · dãy 3 chỗ", "Computer desks: three-place bank"), tr("Cụm máy giữa phòng, hai bên có lối đi và cột kết cấu. Ghế nhựa màu kem xen xanh lá và cam theo ảnh hiện trạng.", "The central computer bank has aisles and structural columns on either side. Cream chairs are mixed with green and orange chairs as shown in the site photos."), tr("Bật / tắt màn hình", "Screen on / off"));
+  const south = add(tr("Dãy máy sát tường", "Wall-side computers"), .1, 4.08, tr("Bàn máy tính · dãy 2 chỗ", "Computer desks: two-place bank"), tr("Cụm bàn hai chỗ bên tường đặc, ghế ngồi hướng về bảng trắng và mặt màn hình quay về phía người dùng.", "Two-place desk banks beside the solid wall. Seats face the whiteboard, with screen fronts facing the users."), tr("Bật / tắt màn hình", "Screen on / off"));
+  const teacher = add(tr("Bàn giảng viên", "Instructor desk"), -w / 2 + 1, d / 2 - 1.12, tr("Bàn trắng · ghế xoay đen", "White desk and black swivel chair"), tr("Bàn giảng viên ở góc đầu phòng phía tường đặc, có máy tính và ghế xoay tựa lưới.", "An instructor desk in the front corner beside the solid wall, with a computer and a mesh-back swivel chair."), tr("Bật / tắt máy giảng viên", "Instructor screen on / off"));
+  const board = add(tr("Bảng & trình chiếu", "Whiteboard and projection"), -w / 2 + .35, 0, tr("Bảng trắng dài · màn chiếu cuốn", "Long whiteboard and roller screen"), tr("Bảng trắng trên tường đầu phòng. Máy chiếu treo trần và hộp màn chiếu cuốn dựng theo ảnh; nút bật chỉ minh họa trình chiếu.", "A whiteboard on the front wall, with a ceiling projector and roller-screen housing rebuilt from the photos. The button shows a sample projection."), tr("Bật / tắt trình chiếu", "Projection on / off"));
+  const openings = add(tr("Cửa & cửa sổ", "Doors and windows"), w / 2 - 1, -d / 2 + .5, tr("Ba lối vào · ba cụm cửa sổ", "Three entrances and three window bays"), tr("Hai cửa trên dãy vách kính, một cửa trên tường cuối phòng phía cầu thang. Các khung kính màu sẫm có dải mờ ngang như ảnh hiện trạng.", "Two entrances along the glazed wall and a third on the rear wall beside the stairs. Dark frames and frosted horizontal bands follow the site photos."));
+  const equipment = add(tr("Thiết bị trong phòng", "Room equipment"), 0, -.6, tr("Máy chiếu · điều hòa · quạt", "Projector, air conditioners and fans"), tr("Máy chiếu trần, các máy điều hòa treo tường, quạt và đèn LED vuông được tái dựng từ ảnh hiện trạng.", "The ceiling projector, wall air conditioners, fans and square LED lights are rebuilt from the site photos."));
   // A small representative detail makes the glazing/equipment stations pickable,
   // while the architectural wall itself retains its independent cutaway behavior.
   ibox(.16, .23, .035, w / 2 - .9, 1.35, -d / 2 + .075, silver, openings);
@@ -249,7 +250,7 @@ export function createComputerLabRoom(scene: THREE.Scene, room: TourRoom, furnis
   });
   const selection = new THREE.BoxHelper(new THREE.Object3D(), 0xf47d37); selection.visible = false; scene.add(selection);
   let selected = -1; const enabled = [false, false, false, false];
-  const portals: Portal[] = localDoors.map((entry, i) => ({ id: `exit-${i}`, label: 'Ra hành lang', x: entry.x, z: entry.z, kind: 'exit' }));
+  const portals: Portal[] = localDoors.map((entry, i) => ({ id: `exit-${i}`, label: tr("Ra hành lang", "To the corridor"), x: entry.x, z: entry.z, kind: 'exit' }));
   scene.userData.computerLabSurvey = { ...COMPUTER_LAB_SURVEY, openings: openingMetadata, columnCenters: columnZ.map(z => ({ x: columnX, z })), estimatedStudentPlaces: 50 };
   return {
     floor, obstacles, interactables, items, width: w, depth: d, start: roomEntry(room).start, portals,

@@ -20,6 +20,7 @@ const context = new Proxy({
 globalThis.document = {
   // Node-only CanvasTexture stub; no browser API is invoked.
   // eslint-disable-next-line typescript/no-deprecated
+  documentElement: { lang: 'en' },
   createElement: () => ({ width: 0, height: 0, getContext: () => context }),
 };
 const modules = new Map();
@@ -44,16 +45,9 @@ const importText = source => import('data:text/javascript;base64,' + Buffer.from
 const { createRoomTour } = await import(compile('components/room-tour.ts'));
 const { createRoomArchitecture } = await import(compile('components/room-architecture.ts'));
 const { createHallway, roomEntry } = await import(compile('components/campus-tour-scene.ts'));
-const catalogueUrl = compile('components/room-catalogue.ts');
-const computerUrl = compile('components/computer-lab-scene.ts');
+const { floorRooms } = await import(compile('components/floor-rooms.ts'));
+const ROOMS = Array.from({ length: 8 }, (_, floor) => floorRooms(floor)).flat();
 const campus = fs.readFileSync(path.join(root, 'components/CampusEMap.tsx'), 'utf8');
-const definitions = [
-  `import { ROOM_CATALOGUE } from '${catalogueUrl}';`,
-  `import { isInstalledComputerLab } from '${computerUrl}';`,
-  campus.slice(campus.indexOf('const FLOOR_LABELS'), campus.indexOf('const PLACES')),
-  'export { ROOMS, floorRooms };',
-].join('\n');
-const { ROOMS, floorRooms } = await importText(definitions);
 const walkSource = campus.slice(campus.indexOf('function roomFree('), campus.indexOf('function RoomPreview('));
 assert.ok(walkSource.includes('function roomWalkPath('), 'Production navigation helpers were not found');
 const navigation = await importText(`const E104_PLAN={};\nconst dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);\n${walkSource}\nexport {roomFree,roomSegmentFree,roomWalkPath};`);

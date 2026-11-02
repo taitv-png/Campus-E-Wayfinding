@@ -1,0 +1,165 @@
+{
+  "updated": "2026-10-26",
+  "source": "User-approved names in Codex chat, including eight room-name confirmations and E602 - E603 Cyber Security Lab on 2026-10-26",
+  "sign_count": 25,
+  "entries": [
+    {
+      "room": "E001",
+      "names": [
+        "Precision Mechanics & Equipment Lab"
+      ]
+    },
+    {
+      "room": "E002",
+      "names": [
+        "Hologram Printing Lab"
+      ]
+    },
+    {
+      "room": "E101",
+      "names": [
+        "Human-Centered AI Innovation Lab"
+      ]
+    },
+    {
+      "room": "E102",
+      "names": [
+        "Immersive Technology Exhibition & Post Production Room"
+      ]
+    },
+    {
+      "room": "E103",
+      "names": [
+        "Classroom"
+      ]
+    },
+    {
+      "room": "E104",
+      "names": [
+        "Immersive Technology Convergence Center",
+        "Human Experience Lab"
+      ]
+    },
+    {
+      "room": "E201",
+      "names": [
+        "META - Digital Twin Lab"
+      ]
+    },
+    {
+      "room": "E202",
+      "names": [
+        "Guest Researchers and Visiting Scholars"
+      ]
+    },
+    {
+      "room": "E203",
+      "names": [
+        "Architectural & Urban Physics Lab"
+      ]
+    },
+    {
+      "room": "E204",
+      "names": [
+        "Smart City Lab",
+        "Urban Sense Lab"
+      ]
+    },
+    {
+      "room": "E301",
+      "names": [
+        "Embedded & IoT System Lab",
+        "Process Control & Industrial Communication Network Lab"
+      ]
+    },
+    {
+      "room": "E302",
+      "names": [
+        "Mobile Robot Lab",
+        "Ocean Robotics Lab"
+      ]
+    },
+    {
+      "room": "E303",
+      "names": [
+        "MPS Station Center"
+      ]
+    },
+    {
+      "room": "E304",
+      "names": [
+        "Automated Vehicles & Systems Lab"
+      ]
+    },
+    {
+      "room": "E401",
+      "names": [
+        "Smart Seaport Logistics & Terminal Operations Lab",
+        "Smart Mobility Lab - Rail Systems Lab"
+      ]
+    },
+    {
+      "room": "E402 - E403",
+      "names": [
+        "AI and Big Data Lab"
+      ]
+    },
+    {
+      "room": "E404",
+      "names": [
+        "Ocean Monitoring & Spatial Planning Lab",
+        "Ocean Physics & Coastal Dynamics Laboratory",
+        "Ocean Renewable Energy Lab"
+      ]
+    },
+    {
+      "room": "E501",
+      "names": [
+        "Classroom"
+      ]
+    },
+    {
+      "room": "E502 - E503",
+      "names": [
+        "Advanced Initiative of Science and Technology Lab"
+      ]
+    },
+    {
+      "room": "E504",
+      "names": [
+        "Classroom"
+      ]
+    },
+    {
+      "room": "E601",
+      "names": [
+        "ISC Open Lab"
+      ]
+    },
+    {
+      "room": "E602 - E603",
+      "names": [
+        "Cyber Security Lab"
+      ]
+    },
+    {
+      "room": "E604",
+      "names": [
+        "Circular Economy Lab"
+      ]
+    },
+    {
+      "room": "E701",
+      "names": [
+        "Meeting Station & Café"
+      ]
+    },
+    {
+      "room": "E702",
+      "names": [
+        "Open Lab & Prototyping Area",
+        "Digital Library"
+      ]
+    }
+  ]
+}

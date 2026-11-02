@@ -21,6 +21,7 @@ const context = new Proxy({
 globalThis.document = {
   // Minimal Node-only CanvasTexture stub; no deprecated browser API is invoked.
   // eslint-disable-next-line typescript/no-deprecated
+  documentElement: { lang: 'en' },
   createElement: () => ({ width: 0, height: 0, getContext: () => context }),
 };
 
@@ -47,18 +48,9 @@ function compile(relativeFile) {
 const labUrl = compile('components/computer-lab-scene.ts');
 const { createComputerLabRoom, isInstalledComputerLab } = await import(labUrl);
 const { roomEntry } = await import(compile('components/campus-tour-scene.ts'));
-const catalogueUrl = compile('components/room-catalogue.ts');
+const { floorRooms } = await import(compile('components/floor-rooms.ts'));
+const ROOMS = Array.from({ length: 8 }, (_, floor) => floorRooms(floor)).flat();
 const campus = fs.readFileSync(path.join(root, 'components/CampusEMap.tsx'), 'utf8');
-const definitions = [
-  `import { ROOM_CATALOGUE } from '${catalogueUrl}';`,
-  `import { isInstalledComputerLab } from '${labUrl}';`,
-  campus.slice(campus.indexOf('const FLOOR_LABELS'), campus.indexOf('const PLACES')),
-  'export { ROOMS };',
-].join('\n');
-const dataJs = ts.transpileModule(definitions, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const { ROOMS } = await import('data:text/javascript;base64,' + Buffer.from(dataJs).toString('base64'));
 
 // Exercise the collision and click-to-walk implementation used by RoomPreview.
 const walkSource = campus.slice(campus.indexOf('function roomFree('), campus.indexOf('function RoomPreview('));
